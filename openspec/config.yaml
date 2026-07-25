@@ -1,20 +1,48 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Fair Spin — веб-застосунок випадкового вибору, де гравець фізично впливає
+  на результат: крутить колесо ривком, тягне ричаг, зрізає колоду.
+  Деплой: GitHub Pages, https://maslovss.github.io/fair-spin/
+  Цільовий пристрій — Android-телефон.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  ПРИНЦИП «ЧЕСНИЙ СТІЛ»
+  Усе, що лежить на столі, реально може випасти. Що випасти не може — зі столу зникає.
+  Результат НЕ обчислюється наперед. Реалізація, яка спершу викликає генератор
+  випадкових чисел для вибору переможця, а потім анімує рух до нього, є порушенням
+  і не приймається. crypto.getRandomValues використовується лише для розкладки
+  (порядок секторів, порядок колоди), не для результату кидка.
+
+  ОБОВ'ЯЗКОВЕ ЧИТАННЯ ПЕРЕД РОБОТОЮ
+  docs/mechanics.md — повна механіка. §8 містить перелік відкинутих рішень
+  із причинами: cooldown, undo кидка, історія результатів, статистика, ачівки,
+  сірі сектори вибулих, ваги окремим полем. Нічого з §8 не пропонувати.
+  openspec/project.md — стек, конвенції, обмеження, команди.
+
+  СТЕК
+  TypeScript strict + Vite, без UI-фреймворка. Колесо — SVG, котушка й карти — DOM+CSS.
+  Звук — Web Audio API синтезом, без аудіофайлів. Сховище — localStorage, один ключ,
+  версіонована схема з міграцією. Офлайн — vite-plugin-pwa, cache-first. Тести — Vitest.
+
+  ЖОРСТКІ ОБМЕЖЕННЯ
+  - base '/fair-spin/', жодних абсолютних шляхів від кореня ніде
+  - жодних мережевих запитів у рантаймі, жодної аналітики й телеметрії
+  - фіксований крок фізики 1/120 с з акумулятором залишку
+  - src/state та src/core не імпортують нічого з DOM
+  - рядки інтерфейсу лише через i18n, мови uk та en, російської не буде
+  - нова рантайм-залежність потребує обґрунтування в design.md
+
+  КОМАНДИ
+  npm run dev | build | preview | typecheck | test
+  Перед позначенням задачі виконаною має проходити:
+  npm run typecheck && npm run test
+
+rules:
+  specs:
+    - Описувати лише поведінку. Назви бібліотек, класів і функцій — у design.md
+    - Кожна вимога має щонайменше один сценарій GIVEN/WHEN/THEN
+  design:
+    - Обґрунтовувати кожну нову рантайм-залежність
+  tasks:
+    - Задача має лишати npm run typecheck && npm run test зеленими
+    - Дробити так, щоб задача виконувалась за один підхід
