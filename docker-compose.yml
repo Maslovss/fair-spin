@@ -1,0 +1,8 @@
+services:
+  fair-spin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${FAIR_SPIN_PORT:-8080}:80"
+    restart: unless-stopped
