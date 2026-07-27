@@ -5,6 +5,7 @@ import {
   type TableLifecycleState
 } from './core/reveal'
 import { createCardsLayout } from './core/cards'
+import { CurrentTableResult } from './core/result-label'
 import {
   applyResult,
   canResetRound,
@@ -55,7 +56,7 @@ let activePresetId: string | null = null
 let activeTable: Table | null = null
 let activeLifecycle: RevealLifecycle<number> | null = null
 const dismissedResume = new Set<string>()
-const lastResults = new Map<string, string>()
+const currentTableResult = new CurrentTableResult()
 let statusTimer: ReturnType<typeof setTimeout> | null = null
 const APPLY_REBUILD_DELAY_MS = 160
 const CARDS_COLLECT_MS = 320
@@ -107,7 +108,7 @@ const renderList = (stored: Stored, t: Translate): void => {
     open: (preset) => {
       activePresetId = preset.id
       dismissedResume.delete(preset.id)
-      lastResults.delete(preset.id)
+      currentTableResult.clear()
       render()
     },
     edit: editPreset,
@@ -152,7 +153,7 @@ const resetRound = (preset: Preset, t: Translate): void => {
     }))
   ) return
   dismissedResume.add(preset.id)
-  lastResults.delete(preset.id)
+  currentTableResult.clear()
   persistPresetState(preset.id, (current) => startNewRound(preset, crypto, current))
 }
 
@@ -206,6 +207,7 @@ const createModeSwitch = (
   options.className = 'mode-switch-options'
   const option = (elimination: boolean, text: string): HTMLButtonElement => {
     const button = actionButton(text, 'mode-choice', () => {
+      if (state.elimination !== elimination) currentTableResult.clear()
       persistPresetState(
         preset.id,
         (current) => setEliminationModeForPreset(preset, current, elimination, crypto)
@@ -285,6 +287,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     Math.max(2, remaining.length)
   )
   const tableId = registration.id
+  currentTableResult.enter(preset.id, tableId)
   state = ensureLayout(tableId, preset, state, crypto)
   if (state.lastTable !== tableId) state = { ...state, lastTable: tableId }
   if (stored.states[preset.id] !== state) {
@@ -308,6 +311,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   const header = document.createElement('header')
   header.className = 'game-header'
   const back = actionButton(`← ${t('game.back')}`, 'text-button back-button', () => {
+    currentTableResult.clear()
     activePresetId = null
     render()
   })
@@ -343,6 +347,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   tableChoiceGroup.append(switcherLabel)
   availableTables.forEach(({ id }) => {
     const choice = actionButton(tableLabel(id, t), 'table-choice', () => {
+      if (id !== tableId) currentTableResult.clear()
       persistPresetState(preset.id, (current) => ({
         ...current,
         lastTable: id,
@@ -358,7 +363,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   const status = document.createElement('p')
   status.className = 'game-status'
   status.setAttribute('role', 'status')
-  const rememberedResult = lastResults.get(preset.id)
+  const rememberedResult = currentTableResult.read(preset.id, tableId)
   if (rememberedResult) status.textContent = t('game.result', { item: rememberedResult })
 
   const tableHost = document.createElement('div')
@@ -379,10 +384,14 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     )
     controls.append(complete)
   } else if (finalAct) {
+    const finalItem = remaining[0] ?? ''
     controls.append(actionButton(
-      t('game.finalAct', { item: remaining[0] ?? '' }),
+      t('game.finalAct', { item: finalItem }),
       'button button-primary final-act',
-      () => persistPresetState(preset.id, (current) => performFinalAct(preset, current))
+      () => {
+        currentTableResult.record(preset.id, tableId, finalItem)
+        persistPresetState(preset.id, (current) => performFinalAct(preset, current))
+      }
     ))
   } else if (tableId === 'cards' ? remaining.length >= 1 : liveOrder.length >= 2) {
     const luck = actionButton(
@@ -427,7 +436,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       onReveal: (index) => {
         const selected = currentTableItems[index]
         if (selected === undefined) return
-        lastResults.set(preset.id, selected)
+        currentTableResult.record(preset.id, tableId, selected)
         status.textContent = t('game.result', { item: selected })
         activeTable?.highlightResult(index)
       },
@@ -441,6 +450,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         if (!state.elimination) {
           activeTable?.clearHighlight()
           if (tableId === 'cards') {
+            currentTableResult.clear()
+            status.textContent = ''
             tableHost.classList.add('cards-collecting')
             setTimeout(() => {
               persistPresetState(preset.id, (current) => ({
@@ -528,11 +539,12 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         status.textContent = weakGestureLabel(tableId, t)
         if (statusTimer !== null) clearTimeout(statusTimer)
         statusTimer = setTimeout(() => {
-          status.textContent = rememberedResult ? t('game.result', { item: rememberedResult }) : ''
+          const result = currentTableResult.read(preset.id, tableId)
+          status.textContent = result ? t('game.result', { item: result }) : ''
         }, 3_000)
       },
       onInteraction: () => {
-        lastResults.delete(preset.id)
+        currentTableResult.clear()
         status.textContent = ''
       }
     })
