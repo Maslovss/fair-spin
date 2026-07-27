@@ -86,9 +86,29 @@ export class ReelTable implements Table {
   tryLuck(): void {
     const context = this.context
     if (!context || context.interactive === false || this.motion || this.settling) return
+    if (!context.onStart()) return
     this.audio.unlock()
     context.onInteraction?.()
     this.spin(wheelVelocityToReel(randomThrowVelocity(), context.items.length))
+  }
+
+  highlightResult(index: number): void {
+    this.clearHighlight()
+    const matches = this.cells.filter((cell) => Number(cell.dataset.itemIndex) === index)
+    const selected = matches.reduce<HTMLElement | null>((closest, cell) => {
+      if (!closest) return cell
+      return Math.abs(Number(cell.dataset.positionCells)) <
+        Math.abs(Number(closest.dataset.positionCells))
+        ? cell
+        : closest
+    }, null)
+    selected?.classList.add('table-result-highlight')
+    this.container?.classList.add('table-is-revealing')
+  }
+
+  clearHighlight(): void {
+    this.cells.forEach((cell) => cell.classList.remove('table-result-highlight'))
+    this.container?.classList.remove('table-is-revealing')
   }
 
   private render(): void {
@@ -142,6 +162,7 @@ export class ReelTable implements Table {
       if (!cell) return
       cell.textContent = context.items[entry.itemIndex] ?? ''
       cell.dataset.itemIndex = String(entry.itemIndex)
+      cell.dataset.positionCells = String(entry.positionCells)
       const pixels = entry.positionCells * this.cellPixels
       cell.style.transform = this.view === 'slot'
         ? `translate3d(0, ${pixels}px, 0)`
@@ -154,9 +175,10 @@ export class ReelTable implements Table {
     if (!surface) throw new Error('Strip surface was not rendered')
     this.gesture = new LinearGesture(surface, 'x', {
       onStart: () => {
-        if (this.motion || this.settling) return false
+        const context = this.context
+        if (this.motion || this.settling || !context?.onStart()) return false
         this.audio.unlock()
-        this.context?.onInteraction?.()
+        context.onInteraction?.()
         this.dragBase = this.currentOffset
         return true
       },
@@ -201,8 +223,10 @@ export class ReelTable implements Table {
       event.button !== 0 ||
       !this.lever
     ) return
+    const context = this.context
+    if (!context?.onStart()) return
     this.audio.unlock()
-    this.context?.onInteraction?.()
+    context.onInteraction?.()
     this.leverPointer = event.pointerId
     this.leverStartY = event.clientY
     this.leverDepth = 0
@@ -276,6 +300,7 @@ export class ReelTable implements Table {
         this.motion = null
         this.setOffset(finalOffset, true)
         const winner = resultIndexFromOffset(finalOffset, active.items.length)
+        active.onResolved(winner)
         this.settleAndDeliver(finalOffset, winner)
         return
       }
@@ -310,7 +335,7 @@ export class ReelTable implements Table {
       this.setOffset(targetOffset, true)
       if (this.delivered) return
       this.delivered = true
-      active.onResult(winner)
+      active.onSettled()
     }
     this.frame = requestAnimationFrame(settle)
   }
@@ -341,6 +366,7 @@ export class ReelTable implements Table {
     container.classList.remove('weak-gesture')
     void container.offsetWidth
     container.classList.add('weak-gesture')
+    context.onCancel()
     context.onWeakGesture()
   }
 

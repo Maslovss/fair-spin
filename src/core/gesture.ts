@@ -89,7 +89,7 @@ export const pointAngle = (event: PointerEvent, element: HTMLElement): number =>
 }
 
 export interface GestureCallbacks {
-  onStart?(): void
+  onStart?(): boolean | void
   onDrag(delta: number): void
   onRelease(velocity: number): void
   onWeak(): void
@@ -120,11 +120,11 @@ export class WheelGesture {
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     if (this.activePointer !== null || event.button !== 0) return
+    if (this.callbacks.onStart?.() === false) return
     this.activePointer = event.pointerId
     this.element.setPointerCapture(event.pointerId)
     this.startAngle = pointAngle(event, this.element)
     this.history.reset(this.startAngle, event.timeStamp)
-    this.callbacks.onStart?.()
   }
 
   private readonly onPointerMove = (event: PointerEvent): void => {

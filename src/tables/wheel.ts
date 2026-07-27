@@ -41,6 +41,7 @@ export class WheelTable implements Table {
   private container: HTMLElement | null = null
   private context: TableContext | null = null
   private rotor: SVGGElement | null = null
+  private readonly sectors: SVGPathElement[] = []
   private gesture: WheelGesture | null = null
   private frame: number | null = null
   private motion: MotionState | null = null
@@ -64,11 +65,12 @@ export class WheelTable implements Table {
     if (!wheel) throw new Error('Wheel surface was not rendered')
     this.gesture = new WheelGesture(wheel, {
       onStart: () => {
-        if (this.motion) return
+        if (this.motion || !this.context?.onStart()) return false
         this.audio.unlock()
         this.context?.onInteraction?.()
         this.clearHint()
         this.dragBase = this.currentAngle
+        return true
       },
       onDrag: (delta) => {
         if (this.motion) return
@@ -93,13 +95,28 @@ export class WheelTable implements Table {
     this.container = null
     this.context = null
     this.rotor = null
+    this.sectors.length = 0
   }
 
   tryLuck(): void {
     if (!this.context || this.context.interactive === false || this.motion) return
+    if (!this.context.onStart()) return
     this.audio.unlock()
     this.context.onInteraction?.()
     this.spin(randomThrowVelocity())
+  }
+
+  highlightResult(index: number): void {
+    this.clearHighlight()
+    const sector = this.sectors[index]
+    if (!sector) return
+    sector.classList.add('table-result-highlight')
+    this.container?.classList.add('table-is-revealing')
+  }
+
+  clearHighlight(): void {
+    this.sectors.forEach((sector) => sector.classList.remove('table-result-highlight'))
+    this.container?.classList.remove('table-is-revealing')
   }
 
   private render(): void {
@@ -129,7 +146,10 @@ export class WheelTable implements Table {
       path.setAttribute('fill', COLORS[index % COLORS.length] ?? '#d95d39')
       path.setAttribute('stroke', '#17130f')
       path.setAttribute('stroke-width', '2')
+      path.setAttribute('class', 'wheel-sector')
+      path.dataset.itemIndex = String(index)
       rotor.append(path)
+      this.sectors.push(path)
 
       const mid = -Math.PI / 2 + ((index + 0.5) * TAU) / context.items.length
       const [x, y] = polar(context.items.length <= 16 ? 74 : 96, mid)
@@ -197,6 +217,8 @@ export class WheelTable implements Table {
         const finalAngle = this.motion.angle
         this.motion = null
         this.setAngle(finalAngle, true)
+        const winner = resultIndexFromAngle(finalAngle, active.items.length)
+        active.onResolved(winner)
         this.settleAndDeliver(finalAngle)
         return
       }
@@ -226,7 +248,7 @@ export class WheelTable implements Table {
       this.setAngle(finalAngle, false)
       if (!this.delivered) {
         this.delivered = true
-        this.context.onResult(resultIndexFromAngle(finalAngle, this.context.items.length))
+        this.context.onSettled()
       }
     }
     this.frame = requestAnimationFrame(settle)
@@ -254,6 +276,7 @@ export class WheelTable implements Table {
     void container.offsetWidth
     container.classList.add('weak-gesture')
     this.setAngle(this.dragBase, true)
+    context.onCancel()
     context.onWeakGesture()
   }
 

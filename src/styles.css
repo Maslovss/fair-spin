@@ -543,6 +543,16 @@ h1 {
   will-change: transform;
 }
 
+.reel-cell.table-result-highlight {
+  z-index: 1;
+  border-color: #fff1b8;
+  background: #fff1b8;
+  box-shadow:
+    0 0 0 3px rgba(207, 86, 53, 0.42),
+    0 0 1.4rem rgba(239, 189, 78, 0.72);
+  filter: brightness(1.08) saturate(1.12);
+}
+
 .reel-surface-slot .reel-cell {
   top: 50%;
   right: 0.8rem;
@@ -571,6 +581,14 @@ h1 {
   background: rgba(207, 86, 53, 0.08);
   box-shadow: inset 0 0 0 2px rgba(255, 250, 240, 0.62);
   pointer-events: none;
+}
+
+.table-is-revealing .reel-sight {
+  border-width: 5px;
+  background: rgba(239, 189, 78, 0.16);
+  box-shadow:
+    inset 0 0 0 2px rgba(255, 250, 240, 0.78),
+    0 0 1.2rem rgba(207, 86, 53, 0.42);
 }
 
 .reel-surface-slot .reel-sight {
@@ -674,6 +692,23 @@ h1 {
   overflow: visible;
   border-radius: 50%;
   filter: drop-shadow(0 5px 7px rgba(33, 27, 22, 0.22));
+}
+
+.wheel-sector {
+  transition: filter 180ms ease, stroke-width 180ms ease;
+}
+
+.wheel-sector.table-result-highlight {
+  stroke: #fff1b8;
+  stroke-width: 5;
+  filter:
+    brightness(1.28)
+    saturate(1.12)
+    drop-shadow(0 0 4px rgba(255, 241, 184, 0.92));
+}
+
+.table-is-revealing .table-result-highlight {
+  animation: result-reveal-pulse 1s ease-in-out 1;
 }
 
 .wheel-label,
@@ -834,6 +869,38 @@ h1 {
   font-size: 0.88rem;
 }
 
+.result-flight {
+  position: fixed;
+  z-index: 20;
+  max-width: min(14rem, 70vw);
+  padding: 0.55rem 0.8rem;
+  overflow: hidden;
+  border: 2px solid #fff1b8;
+  border-radius: 999px;
+  color: #fffaf0;
+  background: var(--accent-dark);
+  box-shadow: 0 0.7rem 1.5rem rgba(53, 34, 22, 0.3);
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 1;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(1);
+  transition:
+    transform 520ms cubic-bezier(.2,.75,.25,1),
+    opacity 160ms ease 390ms;
+}
+
+.result-flight-active {
+  opacity: 0;
+  transform:
+    translate(
+      calc(-50% + var(--flight-x)),
+      calc(-50% + var(--flight-y))
+    )
+    scale(0.72);
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -862,6 +929,11 @@ h1 {
 @keyframes reel-reject {
   30% { transform: translateX(0.4rem); }
   65% { transform: translateX(-0.25rem); }
+}
+
+@keyframes result-reveal-pulse {
+  0%, 100% { filter: brightness(1.08) saturate(1.1); }
+  50% { filter: brightness(1.34) saturate(1.18); }
 }
 
 @media (min-width: 44rem) {

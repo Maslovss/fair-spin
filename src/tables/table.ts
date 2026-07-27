@@ -29,7 +29,10 @@ export interface TableContext {
   reducedMotion: boolean
   ariaLabel: string
   interactive?: boolean
-  onResult(index: number): void
+  onStart(): boolean
+  onCancel(): void
+  onResolved(index: number): void
+  onSettled(): void
   onLayout(layout: WheelLayout | ReelLayout): void
   onWeakGesture(): void
   onInteraction?(): void
@@ -42,4 +45,6 @@ export interface Table {
   mount(el: HTMLElement, context: TableContext): void
   unmount(): void
   tryLuck(): void
+  highlightResult(index: number): void
+  clearHighlight(): void
 }

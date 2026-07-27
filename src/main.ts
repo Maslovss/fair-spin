@@ -1,6 +1,10 @@
 import './styles.css'
 import { detectLanguage, relativeTime, translator, type Translate } from './io/i18n'
 import {
+  RevealLifecycle,
+  type TableLifecycleState
+} from './core/reveal'
+import {
   applyResult,
   canResetRound,
   ensureLayout,
@@ -47,9 +51,12 @@ if (wasFirstLaunch) store.replace(seedStarterPresets(store.get()), false)
 
 let activePresetId: string | null = null
 let activeTable: Table | null = null
+let activeLifecycle: RevealLifecycle<number> | null = null
 const dismissedResume = new Set<string>()
 const lastResults = new Map<string, string>()
 let statusTimer: ReturnType<typeof setTimeout> | null = null
+const APPLY_REBUILD_DELAY_MS = 160
+const RESULT_FLIGHT_MS = 560
 
 const actionButton = (label: string, className: string, action: () => void): HTMLButtonElement => {
   const button = document.createElement('button')
@@ -239,6 +246,30 @@ const resolveRegistration = (
   return { active, available }
 }
 
+const startResultFlight = (tableHost: HTMLElement, item: string): void => {
+  const source = tableHost.querySelector<HTMLElement | SVGGraphicsElement>('.table-result-highlight')
+  const target = document.querySelector<HTMLElement>('.cemetery')
+  if (!source || !target) return
+  const sourceRect = source.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const flight = document.createElement('div')
+  flight.className = 'result-flight'
+  flight.textContent = item
+  flight.style.left = `${sourceRect.left + sourceRect.width / 2}px`
+  flight.style.top = `${sourceRect.top + sourceRect.height / 2}px`
+  flight.style.setProperty(
+    '--flight-x',
+    `${targetRect.left + Math.min(targetRect.width / 2, 120) - (sourceRect.left + sourceRect.width / 2)}px`
+  )
+  flight.style.setProperty(
+    '--flight-y',
+    `${targetRect.top + Math.min(targetRect.height / 2, 90) - (sourceRect.top + sourceRect.height / 2)}px`
+  )
+  document.body.append(flight)
+  requestAnimationFrame(() => requestAnimationFrame(() => flight.classList.add('result-flight-active')))
+  setTimeout(() => flight.remove(), RESULT_FLIGHT_MS)
+}
+
 const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   const settings = stored.settings
   let state = stored.states[preset.id] ?? createPresetStateForPreset(preset)
@@ -369,6 +400,53 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
 
   if (!completed) {
     activeTable = createRegisteredTable(tableId)
+    let lifecycle: RevealLifecycle<number>
+    const updateInteractionState = (phase: TableLifecycleState): void => {
+      tableHost.dataset.lifecycleState = phase
+      const locked = phase !== 'idle'
+      page.querySelectorAll<HTMLButtonElement>('.table-choice, .mode-choice, .luck-button')
+        .forEach((button) => {
+          button.disabled = locked
+        })
+    }
+    lifecycle = new RevealLifecycle<number>({
+      onStateChange: updateInteractionState,
+      onReveal: (index) => {
+        const selected = liveOrder[index]
+        if (selected === undefined) return
+        lastResults.set(preset.id, selected)
+        status.textContent = t('game.result', { item: selected })
+        activeTable?.highlightResult(index)
+      },
+      onApply: (index) => {
+        const selected = liveOrder[index]
+        if (selected === undefined) {
+          activeTable?.clearHighlight()
+          lifecycle.completeApplying()
+          return
+        }
+        if (!state.elimination) {
+          activeTable?.clearHighlight()
+          lifecycle.completeApplying()
+          return
+        }
+        dismissedResume.add(preset.id)
+        startResultFlight(tableHost, selected)
+        activeTable?.clearHighlight()
+        setTimeout(() => {
+          const current = store.get().states[preset.id] ?? state
+          persistPresetState(preset.id, () => applyResult(preset, current, liveOrder, index))
+        }, APPLY_REBUILD_DELAY_MS)
+      }
+    })
+    activeLifecycle = lifecycle
+    updateInteractionState(lifecycle.state)
+    tableHost.addEventListener('pointerdown', (event) => {
+      if (lifecycle.state !== 'revealing') return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      lifecycle.skipReveal()
+    }, { capture: true })
     activeTable.mount(tableHost, {
       items: liveOrder,
       layout: activeLayout,
@@ -377,6 +455,16 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       ariaLabel: tableAriaLabel(tableId, t),
       interactive: !finalAct,
+      onStart: () => lifecycle.tryStart(),
+      onCancel: () => {
+        lifecycle.cancelStart()
+      },
+      onResolved: (index) => {
+        lifecycle.resolve(index)
+      },
+      onSettled: () => {
+        lifecycle.settle()
+      },
       onLayout: (next: WheelLayout | ReelLayout) => {
         persistPresetState(preset.id, (current) => ({
           ...current,
@@ -386,18 +474,6 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
           },
           updatedAt: Date.now()
         }), false)
-      },
-      onResult: (index) => {
-        const selected = liveOrder[index]
-        if (selected === undefined) return
-        lastResults.set(preset.id, selected)
-        const current = store.get().states[preset.id] ?? state
-        if (state.elimination) {
-          dismissedResume.add(preset.id)
-          persistPresetState(preset.id, () => applyResult(preset, current, liveOrder, index))
-        } else {
-          status.textContent = t('game.result', { item: selected })
-        }
       },
       onWeakGesture: () => {
         status.textContent = weakGestureLabel(tableId, t)
@@ -415,6 +491,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
 }
 
 const render = (): void => {
+  activeLifecycle?.destroy()
+  activeLifecycle = null
   activeTable?.unmount()
   activeTable = null
   root.replaceChildren()
