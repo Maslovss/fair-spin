@@ -353,8 +353,69 @@ h1 {
 
 .dialog-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.6rem;
+}
+
+.import-preview {
+  margin: 0;
+  color: var(--accent-dark);
+  font-size: 1.05rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.import-difference {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.import-difference section {
+  min-width: 0;
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.import-difference h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+}
+
+.import-difference ul {
+  max-height: 12rem;
+  margin: 0;
+  padding-left: 1.25rem;
+  overflow: auto;
+}
+
+.import-difference li {
+  margin-block: 0.25rem;
+  overflow-wrap: anywhere;
+}
+
+.import-warning {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.app-toast {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 20;
+  max-width: min(26rem, calc(100% - 2rem));
+  margin: 0;
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  color: var(--paper);
+  background: var(--ink);
+  box-shadow: var(--shadow);
+  font-weight: 750;
 }
 
 .settings-row {
@@ -1132,6 +1193,41 @@ h1 {
   min-width: min(100%, 16rem);
 }
 
+.answer-block {
+  display: grid;
+  gap: 0.2rem;
+  width: min(100%, 42rem);
+  margin-top: 0.45rem;
+  text-align: center;
+}
+
+.answer-block[hidden] {
+  display: none;
+}
+
+.answer-share,
+.order-share {
+  color: var(--accent-dark);
+}
+
+.answer-question {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.answer-value {
+  margin: 0;
+  color: var(--accent-dark);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.8rem, 7vw, 3rem);
+  font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
 .game-status {
   min-height: 1.4rem;
   margin: 0;
@@ -1152,6 +1248,12 @@ h1 {
   justify-content: center;
   gap: 0.6rem;
   padding: 1rem;
+}
+
+@media (max-width: 34rem) {
+  .import-difference {
+    grid-template-columns: 1fr;
+  }
 }
 
 .round-complete h2 {

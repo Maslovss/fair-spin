@@ -9,11 +9,12 @@ import {
 } from './types'
 
 export const MAX_ITEM_LENGTH = 40
+export const MAX_ITEMS = 1000
 export const MAX_NAME_LENGTH = 60
 export const MIN_ITEMS = 2
 
 export class PresetValidationError extends Error {
-  constructor(readonly code: 'name-required' | 'minimum-items' | 'duplicate-name') {
+  constructor(readonly code: 'name-required' | 'minimum-items' | 'maximum-items' | 'duplicate-name') {
     super(code)
   }
 }
@@ -28,6 +29,7 @@ export const validatePresetInput = (name: string, items: readonly string[]) => {
   const normalizedItems = normalizeItems(items)
   if (!normalizedName) throw new PresetValidationError('name-required')
   if (normalizedItems.length < MIN_ITEMS) throw new PresetValidationError('minimum-items')
+  if (normalizedItems.length > MAX_ITEMS) throw new PresetValidationError('maximum-items')
   return { name: normalizedName, items: normalizedItems }
 }
 

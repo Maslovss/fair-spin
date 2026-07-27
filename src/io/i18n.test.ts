@@ -16,6 +16,12 @@ describe('localization', () => {
       .toContain('Коли ‹x›?')
     expect(translator('en')('question.placeholder')).toBe('‹what I have in mind›')
     expect(translator('uk')('question.placeholder')).toBe('‹задумане›')
+    expect(translator('en')('share.question')).toBe('Share question')
+    expect(translator('uk')('share.question')).toBe('Поділитися запитанням')
+    expect(translator('en')('share.importPreview', { name: 'Lunch', count: 3 }))
+      .toBe('“Lunch” · 3 items')
+    expect(translator('uk')('share.importPreview', { name: 'Обід', count: 3 }))
+      .toBe('«Обід» · 3 елементів')
   })
 
   it('formats recent activity without hard-coded date text', () => {

@@ -21,6 +21,7 @@ describe('current table result label', () => {
   it.each([
     'opening a preset',
     'resetting the round',
+    'posing a new question',
     'changing game mode',
     'collecting the cards deck'
   ])('clears after %s', () => {

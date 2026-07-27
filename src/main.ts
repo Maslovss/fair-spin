@@ -11,6 +11,20 @@ import {
   questionTemplateParts
 } from './core/question'
 import { CurrentTableResult } from './core/result-label'
+import { createAnswerPair } from './core/answer-presentation'
+import {
+  clearQuestionHashUrl,
+  decodeQuestionHash,
+  prepareQuestionShare,
+  QuestionShareError,
+  type SharedQuestion
+} from './io/question-share'
+import {
+  formatSharedOrder,
+  formatSingleAnswer,
+  fullOrderText,
+  shareText
+} from './io/share'
 import {
   applyResult,
   canPlayQuestion,
@@ -38,6 +52,7 @@ import {
 import {
   addStarterPresets,
   assertUniquePresetName,
+  createPreset,
   duplicatePreset,
   createPresetStateForPreset,
   removePreset,
@@ -56,6 +71,11 @@ import { openPresetEditor } from './ui/preset-editor'
 import { renderPresetList } from './ui/preset-list'
 import { openSettings } from './ui/settings'
 import { openQuestionPrompt } from './ui/question-prompt'
+import { renderAnswerBlock } from './ui/answer-block'
+import {
+  openQuestionImport,
+  openQuestionImportError
+} from './ui/question-import'
 
 const root = document.querySelector<HTMLElement>('#app')
 if (!root) throw new Error('Application root is missing')
@@ -73,6 +93,7 @@ let statusTimer: ReturnType<typeof setTimeout> | null = null
 const APPLY_REBUILD_DELAY_MS = 160
 const CARDS_COLLECT_MS = 320
 const RESULT_FLIGHT_MS = 560
+const appUrl = new URL(location.pathname, location.origin).href
 
 const actionButton = (label: string, className: string, action: () => void): HTMLButtonElement => {
   const button = document.createElement('button')
@@ -81,6 +102,42 @@ const actionButton = (label: string, className: string, action: () => void): HTM
   button.textContent = label
   button.addEventListener('click', action)
   return button
+}
+
+const showToast = (message: string): void => {
+  document.querySelector('.app-toast')?.remove()
+  const toast = document.createElement('p')
+  toast.className = 'app-toast'
+  toast.setAttribute('role', 'status')
+  toast.textContent = message
+  document.body.append(toast)
+  setTimeout(() => toast.remove(), 3_000)
+}
+
+const performShare = async (
+  text: string,
+  t: Translate,
+  status?: HTMLElement
+): Promise<void> => {
+  try {
+    const outcome = await shareText(text)
+    const message = t(outcome === 'shared' ? 'share.shared' : 'share.copied')
+    if (status) status.textContent = message
+    else showToast(message)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    const message = t('share.failed')
+    if (status) status.textContent = message
+    else showToast(message)
+  }
+}
+
+const shareQuestion = async (preset: Preset, t: Translate): Promise<void> => {
+  const prepared = await prepareQuestionShare(preset, location.href)
+  const text = prepared.kind === 'link'
+    ? prepared.text
+    : `${t('share.listTooLong')}\n\n${preset.name}\n${prepared.text}`
+  await performShare(text, t)
 }
 
 const updatePresetInStore = (next: Preset, previous?: Preset): void => {
@@ -215,7 +272,7 @@ const poseNewQuestion = (preset: Preset, state: PresetState, t: Translate): void
 
 const copyOrder = async (items: readonly string[], status: HTMLElement, t: Translate): Promise<void> => {
   try {
-    await navigator.clipboard.writeText(items.map((item, index) => `${index + 1}. ${item}`).join('\n'))
+    await navigator.clipboard.writeText(fullOrderText(items))
     status.textContent = t('round.copied')
   } catch {
     status.textContent = t('round.copyFailed')
@@ -446,6 +503,11 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     menu.append(summary, saveCopy)
     headerActions.append(menu)
   }
+  headerActions.append(actionButton(
+    t('share.question'),
+    'button button-quiet',
+    () => void shareQuestion(preset, t)
+  ))
   headerActions.append(
     actionButton(t('game.edit'), 'button button-quiet', () => editPreset(preset))
   )
@@ -487,11 +549,58 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   switcher.append(tableChoiceGroup, createModeSwitch(preset, state, t))
   tableArea.append(switcher)
 
+  const answerHost = document.createElement('section')
+  answerHost.className = 'answer-block'
+  answerHost.setAttribute('role', 'status')
+  answerHost.setAttribute('aria-live', 'polite')
+  const answerShare = actionButton(
+    t('share.answer'),
+    'text-button answer-share',
+    () => {
+      const answer = currentTableResult.read(preset.id, tableId)
+      if (!answer) return
+      void performShare(
+        formatSingleAnswer(
+          createAnswerPair(preset, state, answer),
+          tableLabel(tableId, t),
+          appUrl
+        ),
+        t,
+        status
+      )
+    }
+  )
+  const rememberedResult = currentTableResult.read(preset.id, tableId)
+  const showAnswer = (answer: string | null) => {
+    renderAnswerBlock(
+      answerHost,
+      answer ? createAnswerPair(preset, state, answer) : null
+    )
+    answerShare.hidden = answer === null
+  }
+
   const status = document.createElement('p')
   status.className = 'game-status'
   status.setAttribute('role', 'status')
-  const rememberedResult = currentTableResult.read(preset.id, tableId)
-  if (rememberedResult) status.textContent = t('game.result', { item: rememberedResult })
+  showAnswer(rememberedResult)
+
+  const shareOrder = () => void performShare(
+    formatSharedOrder(
+      posedTitle,
+      state.drawn,
+      preset.items.length,
+      completed,
+      {
+        order: t('share.orderLabel'),
+        all: t('share.allLabel'),
+        of: t('share.ofLabel'),
+        andMore: t('share.andMoreLabel')
+      },
+      appUrl
+    ),
+    t,
+    status
+  )
 
   const tableHost = document.createElement('div')
   tableHost.className = 'table-host'
@@ -519,7 +628,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     complete.append(
       completeTitle,
       actionButton(t('round.new'), 'button button-primary', () => resetRound(preset, t)),
-      actionButton(t('round.copy'), 'button button-quiet', () => void copyOrder(state.drawn, status, t))
+      actionButton(t('round.copy'), 'button button-quiet', () => void copyOrder(state.drawn, status, t)),
+      actionButton(t('share.order'), 'button button-quiet', shareOrder)
     )
     controls.append(complete)
   } else if (finalAct) {
@@ -546,7 +656,10 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     unavailable.textContent = t('game.unavailable')
     controls.append(unavailable)
   }
-  controls.append(status)
+  if (state.elimination && state.drawn.length > 0 && !completed) {
+    controls.append(actionButton(t('share.order'), 'text-button order-share', shareOrder))
+  }
+  controls.append(answerHost, answerShare, status)
   tableArea.append(controls)
   layout.append(tableArea)
   if (state.elimination) {
@@ -577,7 +690,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         const selected = currentTableItems[index]
         if (selected === undefined) return
         currentTableResult.record(preset.id, tableId, selected)
-        status.textContent = t('game.result', { item: selected })
+        showAnswer(selected)
         activeTable?.highlightResult(index)
       },
       onApply: (index) => {
@@ -591,6 +704,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
           activeTable?.clearHighlight()
           if (tableId === 'cards') {
             currentTableResult.clear()
+            showAnswer(null)
             status.textContent = ''
             tableHost.classList.add('cards-collecting')
             setTimeout(() => {
@@ -679,12 +793,12 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         status.textContent = weakGestureLabel(tableId, t)
         if (statusTimer !== null) clearTimeout(statusTimer)
         statusTimer = setTimeout(() => {
-          const result = currentTableResult.read(preset.id, tableId)
-          status.textContent = result ? t('game.result', { item: result }) : ''
+          status.textContent = ''
         }, 3_000)
       },
       onInteraction: () => {
         currentTableResult.clear()
+        showAnswer(null)
         status.textContent = ''
       }
     })
@@ -714,3 +828,72 @@ const render = (): void => {
 store.subscribe(render)
 window.addEventListener('pagehide', () => store.flush())
 render()
+
+const clearImportHash = (): void => {
+  history.replaceState(null, '', clearQuestionHashUrl(location))
+}
+
+const addImportedQuestion = (question: SharedQuestion): void => {
+  const preset = createPreset(question)
+  store.update((stored) => ({
+    ...stored,
+    presets: [...stored.presets, preset]
+  }))
+}
+
+const replaceImportedQuestion = (
+  existing: Preset,
+  question: SharedQuestion
+): void => {
+  const now = Date.now()
+  const replacement: Preset = {
+    ...existing,
+    name: question.name,
+    items: [...question.items],
+    updatedAt: now
+  }
+  currentTableResult.clear()
+  store.update((stored) => ({
+    ...stored,
+    presets: stored.presets.map((preset) =>
+      preset.id === existing.id ? replacement : preset
+    ),
+    states: {
+      ...stored.states,
+      [existing.id]: startNewRound(
+        replacement,
+        crypto,
+        stored.states[existing.id] ?? createPresetStateForPreset(existing),
+        now
+      )
+    }
+  }))
+}
+
+const offerQuestionImport = async (): Promise<void> => {
+  if (!location.hash.startsWith('#q=')) return
+  const t = translator(store.get().settings.lang)
+  try {
+    const question = await decodeQuestionHash(location.hash)
+    openQuestionImport(root, t, question, store.get().presets, {
+      add: (imported) => {
+        clearImportHash()
+        addImportedQuestion(imported)
+      },
+      replace: (existing, imported) => {
+        clearImportHash()
+        replaceImportedQuestion(existing, imported)
+      },
+      cancel: clearImportHash
+    })
+  } catch (error) {
+    openQuestionImportError(
+      root,
+      t,
+      error instanceof QuestionShareError && error.code === 'new-version',
+      clearImportHash
+    )
+  }
+}
+
+void offerQuestionImport()

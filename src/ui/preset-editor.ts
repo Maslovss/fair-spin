@@ -108,7 +108,9 @@ export const openPresetEditor = (
             ? 'editor.error.name'
             : caught.code === 'duplicate-name'
               ? 'editor.error.duplicate'
-              : 'editor.error.items'
+              : caught.code === 'maximum-items'
+                ? 'editor.error.maxItems'
+                : 'editor.error.items'
         )
       } else {
         throw caught
