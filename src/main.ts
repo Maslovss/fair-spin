@@ -188,6 +188,7 @@ const poseNewQuestion = (preset: Preset, state: PresetState, t: Translate): void
   openQuestionPrompt(
     root,
     t,
+    preset.name,
     (value) => {
       if (
         needsRoundResetConfirmation(state) &&
@@ -381,7 +382,9 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   if (template && state.question !== undefined) {
     const parts = questionTemplateParts(preset.name)
     const before = parts?.before ?? ''
-    title.append(document.createTextNode(before ? `${before} ` : ''))
+    title.append(document.createTextNode(
+      before && !/\s$/u.test(before) ? `${before} ` : before
+    ))
     const completion = document.createElement('span')
     completion.className = 'question-completion'
     completion.textContent = state.question
@@ -389,7 +392,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   } else {
     title.textContent = posedTitle
   }
-  if (template) {
+  if (template && state.question === undefined) {
     title.classList.add('question-title-action')
     title.tabIndex = 0
     title.setAttribute('role', 'button')

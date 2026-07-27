@@ -10,6 +10,12 @@ describe('localization', () => {
   it('translates and interpolates interface strings', () => {
     expect(translator('en')('questions.count', { count: 4 })).toBe('4 items')
     expect(translator('uk')('questions.count', { count: 4 })).toBe('4 елементів')
+    expect(translator('en')('editor.templatePreview', { preview: 'When ‹x›?' }))
+      .toContain('When ‹x›?')
+    expect(translator('uk')('editor.templatePreview', { preview: 'Коли ‹x›?' }))
+      .toContain('Коли ‹x›?')
+    expect(translator('en')('question.placeholder')).toBe('‹what I have in mind›')
+    expect(translator('uk')('question.placeholder')).toBe('‹задумане›')
   })
 
   it('formats recent activity without hard-coded date text', () => {

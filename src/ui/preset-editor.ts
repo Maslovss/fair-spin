@@ -1,4 +1,5 @@
 import type { Translate } from '../io/i18n'
+import { insertTemplateSlot, templatePreview } from '../core/question'
 import {
   MAX_NAME_LENGTH,
   PresetValidationError,
@@ -33,6 +34,34 @@ export const openPresetEditor = (
   name.placeholder = t('editor.namePlaceholder')
   name.value = preset?.name ?? initial?.name ?? ''
   nameLabel.append(name)
+  const namePreview = document.createElement('p')
+  namePreview.className = 'editor-name-preview'
+  namePreview.setAttribute('aria-live', 'polite')
+  const makeTemplate = document.createElement('button')
+  makeTemplate.type = 'button'
+  makeTemplate.className = 'text-button editor-make-template'
+  makeTemplate.textContent = t('editor.makeTemplate')
+  let insertionCursor: number | null = null
+  const renderNameAffordance = () => {
+    const preview = templatePreview(name.value, t('question.placeholder'))
+    namePreview.textContent = preview === null
+      ? t('editor.readyPreview')
+      : t('editor.templatePreview', { preview })
+    makeTemplate.hidden = preview !== null
+  }
+  name.addEventListener('input', renderNameAffordance)
+  makeTemplate.addEventListener('pointerdown', () => {
+    insertionCursor = document.activeElement === name ? name.selectionStart : null
+  })
+  makeTemplate.addEventListener('click', () => {
+    const inserted = insertTemplateSlot(name.value, insertionCursor)
+    insertionCursor = null
+    name.value = inserted.name
+    renderNameAffordance()
+    name.focus()
+    name.setSelectionRange(inserted.cursor, inserted.cursor)
+  })
+  renderNameAffordance()
 
   const itemsLabel = document.createElement('label')
   itemsLabel.textContent = t('editor.items')
@@ -87,7 +116,7 @@ export const openPresetEditor = (
     }
   })
   dialog.addEventListener('close', () => dialog.remove())
-  form.append(title, nameLabel, itemsLabel, error, actions)
+  form.append(title, nameLabel, namePreview, makeTemplate, itemsLabel, error, actions)
   dialog.append(form)
   host.append(dialog)
   dialog.showModal()

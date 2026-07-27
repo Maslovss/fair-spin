@@ -284,6 +284,55 @@ h1 {
   line-height: 1.45;
 }
 
+.editor-name-preview {
+  min-height: 1.4rem;
+  margin: -0.55rem 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.editor-make-template {
+  justify-self: start;
+  margin-top: -0.65rem;
+  padding-inline: 0;
+}
+
+.question-dialog {
+  width: min(48rem, calc(100% - 1.4rem));
+}
+
+.dialog .question-compose {
+  margin: 0;
+  font-size: clamp(1.8rem, 7vw, 3.3rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.question-inline-input {
+  padding: 0 0.08em;
+  border-bottom: 0.09em solid var(--accent);
+  outline: none;
+  color: var(--accent-dark);
+  background: rgba(238, 64, 30, 0.07);
+  font: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.question-inline-input[data-empty="true"]::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.question-inline-input:focus-visible {
+  border-bottom-color: var(--yellow);
+  box-shadow: 0 0.12em 0 var(--yellow);
+}
+
 .toggle-row {
   grid-template-columns: auto 1fr;
   align-items: center;
