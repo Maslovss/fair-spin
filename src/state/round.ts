@@ -1,4 +1,5 @@
 import { shuffle, type CryptoSource } from '../core/random'
+import { cardsGridColumns, createCardsLayout } from '../core/cards'
 import { insertAtRandom } from './presets'
 import {
   createPresetState,
@@ -43,6 +44,45 @@ const reconcileOrder = (
   return kept
 }
 
+const hasSameOccurrences = (left: readonly string[], right: readonly string[]): boolean => {
+  if (left.length !== right.length) return false
+  const remaining = [...right]
+  for (const item of left) {
+    const index = remaining.indexOf(item)
+    if (index < 0) return false
+    remaining.splice(index, 1)
+  }
+  return remaining.length === 0
+}
+
+const reconcileDealtCards = (
+  layout: CardsLayout,
+  items: readonly string[]
+): CardsLayout => {
+  const missing = [...items]
+  for (const item of layout.order) {
+    const index = missing.indexOf(item)
+    if (index >= 0) missing.splice(index, 1)
+  }
+  const originalLength = layout.order.length
+  const order = [...layout.order, ...missing]
+  const columns = layout.columns ?? cardsGridColumns(originalLength)
+  const positions = Array.from({ length: originalLength }, (_, slot) => {
+    const stored = layout.positions[slot]
+    return stored !== undefined && stored >= 0 && stored < originalLength ? stored : slot
+  })
+  positions.push(...missing.map((_, index) => originalLength + index))
+  if (
+    order.length === layout.order.length &&
+    positions.length === layout.positions.length &&
+    positions.every((position, index) => position === layout.positions[index]) &&
+    layout.columns === columns
+  ) {
+    return layout
+  }
+  return { ...layout, order, positions, columns }
+}
+
 export const ensureWheelLayout = (
   preset: Preset,
   state: PresetState,
@@ -79,9 +119,11 @@ export const ensureCardsLayout = (
   source: CryptoSource
 ): { state: PresetState; layout: CardsLayout } => {
   const existing = state.tables.cards
-  const layout: CardsLayout = existing
-    ? { ...existing, order: reconcileOrder(existing.order, preset.items, source) }
-    : { order: shuffle(preset.items, source), dealt: false, cut: false }
+  const layout = existing?.dealt
+    ? reconcileDealtCards(existing, preset.items)
+    : existing && hasSameOccurrences(existing.order, preset.items)
+      ? existing
+      : createCardsLayout(preset.items, source)
   return { layout, state: { ...state, tables: { ...state.tables, cards: layout } } }
 }
 
@@ -143,7 +185,9 @@ export const syncEditedPreset = (
     ? { ...state.tables.reel, order: reconcileOrder(state.tables.reel.order, next.items, source) }
     : undefined
   const cards = state.tables.cards
-    ? { ...state.tables.cards, order: reconcileOrder(state.tables.cards.order, next.items, source) }
+    ? state.tables.cards.dealt
+      ? reconcileDealtCards(state.tables.cards, next.items)
+      : createCardsLayout(next.items, source)
     : undefined
   void previous
   return {
@@ -174,7 +218,7 @@ export const startNewRound = (
       reel: { order: shuffle(preset.items, source), offset: state.tables.reel.offset }
     }),
     ...(state.tables.cards && {
-      cards: { order: shuffle(preset.items, source), dealt: false, cut: false }
+      cards: createCardsLayout(preset.items, source)
     })
   },
   updatedAt: now
@@ -188,5 +232,23 @@ export const setEliminationMode = (
   state.elimination === elimination
     ? state
     : { ...state, elimination, updatedAt: now }
+
+export const setEliminationModeForPreset = (
+  preset: Preset,
+  state: PresetState,
+  elimination: boolean,
+  source: CryptoSource,
+  now = Date.now()
+): PresetState => {
+  const next = setEliminationMode(state, elimination, now)
+  if (next === state || !state.tables.cards) return next
+  return {
+    ...next,
+    tables: {
+      ...next.tables,
+      cards: createCardsLayout(preset.items, source)
+    }
+  }
+}
 
 export const canResetRound = (state: PresetState): boolean => state.drawn.length > 0

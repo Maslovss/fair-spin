@@ -107,6 +107,31 @@ describe('storage migration', () => {
       tables: { reel: { offset: 4.5 } }
     })
   })
+
+  it('fills new cards fields when restoring an older v2 cards layout', () => {
+    const current = {
+      ...cleanStored('en'),
+      presets: [{ id: 'p', name: 'P', items: ['A', 'B'], createdAt: 1, updatedAt: 2 }],
+      states: {
+        p: {
+          elimination: true,
+          lastTable: 'cards',
+          drawn: [],
+          tables: {
+            cards: { order: ['B', 'A'], dealt: true, cut: true }
+          },
+          updatedAt: 3
+        }
+      }
+    }
+    expect(migrate(current).states.p?.tables.cards).toEqual({
+      order: ['B', 'A'],
+      cutOffset: 0,
+      dealt: true,
+      cut: true,
+      positions: [0, 1]
+    })
+  })
 })
 
 describe('PersistedStore', () => {

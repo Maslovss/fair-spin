@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { visibleCardPositions } from '../core/cards'
 import type { CryptoSource } from '../core/random'
 import { createPreset } from './presets'
 import {
@@ -12,6 +13,7 @@ import {
   getRemainingItems,
   performFinalAct,
   setEliminationMode,
+  setEliminationModeForPreset,
   startNewRound,
   syncEditedPreset
 } from './round'
@@ -96,13 +98,89 @@ describe('round transitions', () => {
     expect(synced.tables.wheel?.angle).toBe(1.25)
   })
 
+  it('keeps dealt card slots fixed and appends a card for a new item', () => {
+    const cards = {
+      order: ['C', 'A', 'D', 'B'],
+      cutOffset: 0,
+      cut: true,
+      dealt: true,
+      positions: [0, 1, 2, 3]
+    }
+    const state = {
+      ...createPresetState(1, true),
+      tables: { cards }
+    }
+    const edited = { ...preset, items: [...preset.items, 'E'] }
+    const synced = syncEditedPreset(preset, edited, state, source(), 41)
+    const next = synced.tables.cards
+
+    expect(next?.order.slice(0, 4)).toEqual(cards.order)
+    expect(next?.positions.slice(0, 4)).toEqual(cards.positions)
+    expect(next?.order[4]).toBe('E')
+    expect(next?.positions[4]).toBe(4)
+    expect(next?.columns).toBe(2)
+  })
+
+  it('shows a card gap after the item was eliminated on the wheel', () => {
+    const cards = {
+      order: ['A', 'B', 'C', 'D'],
+      cutOffset: 0,
+      cut: true,
+      dealt: true,
+      positions: [0, 1, 2, 3]
+    }
+    const initial = {
+      ...createPresetState(1, true),
+      tables: {
+        wheel: { order: ['A', 'B', 'C', 'D'], angle: 0 },
+        cards
+      }
+    }
+    const afterWheel = applyResult(preset, initial, initial.tables.wheel.order, 1, 42)
+    const returned = ensureCardsLayout(preset, afterWheel, source())
+    const visible = visibleCardPositions(returned.layout, preset.items, afterWheel.drawn)
+
+    expect(afterWheel.drawn).toEqual(['B'])
+    expect(visible).toEqual([0, -1, 2, 3])
+    expect(returned.layout.positions).toEqual(cards.positions)
+  })
+
+  it('matches the remaining count after alternating between tables', () => {
+    const cards = {
+      order: ['D', 'B', 'A', 'C'],
+      cutOffset: 0,
+      cut: true,
+      dealt: true,
+      positions: [0, 1, 2, 3]
+    }
+    const initial = {
+      ...createPresetState(1, true),
+      tables: { cards }
+    }
+    const afterWheel = applyResult(preset, initial, ['A', 'B', 'C', 'D'], 1, 43)
+    const reelOrder = getLiveOrder(['D', 'C', 'B', 'A'], afterWheel.drawn)
+    const afterReel = applyResult(preset, afterWheel, reelOrder, 0, 44)
+    const visible = visibleCardPositions(cards, preset.items, afterReel.drawn)
+
+    expect(afterReel.drawn).toEqual(['B', 'D'])
+    expect(visible.filter((position) => position >= 0)).toHaveLength(
+      getRemainingItems(preset, afterReel).length
+    )
+  })
+
   it('reshuffles layouts for a new round while preserving wheel angle', () => {
     const state = {
       ...createPresetState(1, true),
       drawn: ['A'],
       tables: {
         wheel: { order: ['A', 'B', 'C', 'D'], angle: 2.75 },
-        cards: { order: ['A', 'B', 'C', 'D'], dealt: true, cut: true }
+        cards: {
+          order: ['A', 'B', 'C', 'D'],
+          cutOffset: 0,
+          dealt: true,
+          cut: true,
+          positions: [0, 1, 2, 3]
+        }
       }
     }
     const reset = startNewRound(preset, source(), state, 50)
@@ -128,5 +206,30 @@ describe('round transitions', () => {
     expect(restored.drawn).toEqual(['B', 'A'])
     expect(getRemainingItems(preset, restored)).toEqual(['C', 'D'])
     expect(restored.tables.wheel?.order).toEqual(['A', 'B', 'C', 'D'])
+  })
+
+  it('returns cards to a newly shuffled undealt deck when mode changes', () => {
+    const cards = {
+      order: ['A', 'B', 'C', 'D'],
+      cutOffset: 0,
+      cut: true,
+      dealt: true,
+      positions: [0, -1, 2, 3]
+    }
+    const state = {
+      ...createPresetState(1, true),
+      drawn: ['B'],
+      tables: { cards }
+    }
+    const next = setEliminationModeForPreset(preset, state, false, source(), 9)
+    expect(next.elimination).toBe(false)
+    expect(next.drawn).toEqual(['B'])
+    expect(next.tables.cards).toMatchObject({
+      cutOffset: 0,
+      cut: false,
+      dealt: false,
+      positions: []
+    })
+    expect(next.tables.cards?.order.toSorted()).toEqual(preset.items.toSorted())
   })
 })

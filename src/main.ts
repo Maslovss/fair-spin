@@ -4,6 +4,7 @@ import {
   RevealLifecycle,
   type TableLifecycleState
 } from './core/reveal'
+import { createCardsLayout } from './core/cards'
 import {
   applyResult,
   canResetRound,
@@ -11,12 +12,13 @@ import {
   getLiveOrder,
   getRemainingItems,
   performFinalAct,
-  setEliminationMode,
+  setEliminationModeForPreset,
   startNewRound,
   syncEditedPreset
 } from './state/round'
 import {
   createPresetState,
+  type CardsLayout,
   type Preset,
   type PresetState,
   type ReelLayout,
@@ -56,6 +58,7 @@ const dismissedResume = new Set<string>()
 const lastResults = new Map<string, string>()
 let statusTimer: ReturnType<typeof setTimeout> | null = null
 const APPLY_REBUILD_DELAY_MS = 160
+const CARDS_COLLECT_MS = 320
 const RESULT_FLIGHT_MS = 560
 
 const actionButton = (label: string, className: string, action: () => void): HTMLButtonElement => {
@@ -203,7 +206,10 @@ const createModeSwitch = (
   options.className = 'mode-switch-options'
   const option = (elimination: boolean, text: string): HTMLButtonElement => {
     const button = actionButton(text, 'mode-choice', () => {
-      persistPresetState(preset.id, (current) => setEliminationMode(current, elimination))
+      persistPresetState(
+        preset.id,
+        (current) => setEliminationModeForPreset(preset, current, elimination, crypto)
+      )
     })
     button.setAttribute('aria-pressed', String(state.elimination === elimination))
     return button
@@ -227,7 +233,7 @@ const tableAriaLabel = (id: TableId, t: Translate): string => {
   if (id === 'wheel') return t('game.wheelLabel')
   if (id === 'slot') return t('game.slotLabel')
   if (id === 'strip') return t('game.stripLabel')
-  return t('game.cards')
+  return t('game.cardsLabel')
 }
 
 const weakGestureLabel = (id: TableId, t: Translate): string => {
@@ -284,11 +290,18 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   if (stored.states[preset.id] !== state) {
     persistPresetState(preset.id, () => state, false)
   }
-  const activeLayout = tableId === 'wheel' ? state.tables.wheel : state.tables.reel
+  const activeLayout = tableId === 'wheel'
+    ? state.tables.wheel
+    : tableId === 'cards'
+      ? state.tables.cards
+      : state.tables.reel
   if (!activeLayout) throw new Error(`Layout was not created for table: ${tableId}`)
-  const liveOrder = getLiveOrder(activeLayout.order, state.elimination ? state.drawn : [])
+  const liveOrder = tableId === 'cards'
+    ? [...activeLayout.order]
+    : getLiveOrder(activeLayout.order, state.elimination ? state.drawn : [])
+  let currentTableItems = [...liveOrder]
   const completed = state.elimination && remaining.length === 0
-  const finalAct = state.elimination && remaining.length === 1
+  const finalAct = state.elimination && remaining.length === 1 && tableId !== 'cards'
 
   const page = document.createElement('main')
   page.className = 'game-page'
@@ -371,7 +384,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       'button button-primary final-act',
       () => persistPresetState(preset.id, (current) => performFinalAct(preset, current))
     ))
-  } else if (liveOrder.length >= 2) {
+  } else if (tableId === 'cards' ? remaining.length >= 1 : liveOrder.length >= 2) {
     const luck = actionButton(
       t('game.tryLuck'),
       'button button-primary luck-button',
@@ -412,14 +425,14 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     lifecycle = new RevealLifecycle<number>({
       onStateChange: updateInteractionState,
       onReveal: (index) => {
-        const selected = liveOrder[index]
+        const selected = currentTableItems[index]
         if (selected === undefined) return
         lastResults.set(preset.id, selected)
         status.textContent = t('game.result', { item: selected })
         activeTable?.highlightResult(index)
       },
       onApply: (index) => {
-        const selected = liveOrder[index]
+        const selected = currentTableItems[index]
         if (selected === undefined) {
           activeTable?.clearHighlight()
           lifecycle.completeApplying()
@@ -427,6 +440,20 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         }
         if (!state.elimination) {
           activeTable?.clearHighlight()
+          if (tableId === 'cards') {
+            tableHost.classList.add('cards-collecting')
+            setTimeout(() => {
+              persistPresetState(preset.id, (current) => ({
+                ...current,
+                tables: {
+                  ...current.tables,
+                  cards: createCardsLayout(preset.items, crypto)
+                },
+                updatedAt: Date.now()
+              }))
+            }, CARDS_COLLECT_MS)
+            return
+          }
           lifecycle.completeApplying()
           return
         }
@@ -435,7 +462,10 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         activeTable?.clearHighlight()
         setTimeout(() => {
           const current = store.get().states[preset.id] ?? state
-          persistPresetState(preset.id, () => applyResult(preset, current, liveOrder, index))
+          persistPresetState(
+            preset.id,
+            () => applyResult(preset, current, currentTableItems, index)
+          )
         }, APPLY_REBUILD_DELAY_MS)
       }
     })
@@ -448,13 +478,25 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       lifecycle.skipReveal()
     }, { capture: true })
     activeTable.mount(tableHost, {
-      items: liveOrder,
+      items: currentTableItems,
+      roundItems: preset.items,
       layout: activeLayout,
+      drawn: state.elimination ? state.drawn : [],
       sound: settings.sound,
       haptics: settings.haptics,
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       ariaLabel: tableAriaLabel(tableId, t),
       interactive: !finalAct,
+      cardsLabels: tableId === 'cards' ? {
+        deck: t('cards.deck'),
+        cutHint: t('cards.cutHint'),
+        cutRequired: t('cards.cutRequired'),
+        deal: t('cards.deal'),
+        dealing: t('cards.dealing'),
+        cardBack: (position) => t('cards.cardBack', { position }),
+        empty: (position) => t('cards.empty', { position })
+      } : undefined,
+      canPrepare: () => lifecycle.state === 'idle',
       onStart: () => lifecycle.tryStart(),
       onCancel: () => {
         lifecycle.cancelStart()
@@ -465,12 +507,19 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       onSettled: () => {
         lifecycle.settle()
       },
-      onLayout: (next: WheelLayout | ReelLayout) => {
+      onLayout: (next: WheelLayout | ReelLayout | CardsLayout) => {
+        if ('positions' in next) currentTableItems = [...next.order]
         persistPresetState(preset.id, (current) => ({
           ...current,
           tables: {
             ...current.tables,
-            ...('angle' in next ? { wheel: next } : { reel: next })
+            ...(
+              'angle' in next
+                ? { wheel: next }
+                : 'positions' in next
+                  ? { cards: next }
+                  : { reel: next }
+            )
           },
           updatedAt: Date.now()
         }), false)

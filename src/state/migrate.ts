@@ -31,6 +31,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string')
 
+const isNumberArray = (value: unknown): value is number[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'number')
+
 interface PresetV1 extends Preset {
   elimination: boolean
 }
@@ -93,8 +96,22 @@ const parseCards = (value: unknown): CardsLayout | undefined => {
   }
   return {
     order: value.order,
+    cutOffset: typeof value.cutOffset === 'number' ? value.cutOffset : 0,
     dealt: value.dealt,
-    cut: value.cut
+    cut: value.cut,
+    positions: isNumberArray(value.positions)
+      ? value.positions
+      : value.dealt
+        ? value.order.map((_, index) => index)
+        : [],
+    ...(
+      typeof value.columns === 'number' &&
+      Number.isInteger(value.columns) &&
+      value.columns >= 2 &&
+      value.columns <= 4
+        ? { columns: value.columns }
+        : {}
+    )
   }
 }
 

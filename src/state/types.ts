@@ -22,8 +22,11 @@ export interface ReelLayout {
 
 export interface CardsLayout {
   order: string[]
+  cutOffset: number
   dealt: boolean
   cut: boolean
+  positions: number[]
+  columns?: number
 }
 
 export interface TableLayouts {

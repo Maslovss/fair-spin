@@ -478,6 +478,238 @@ h1 {
   padding: 0.7rem 0;
 }
 
+.cards-machine {
+  display: grid;
+  place-items: center;
+  gap: 1rem;
+  width: min(100%, 46rem);
+  min-height: 28rem;
+  user-select: none;
+}
+
+.cards-cut-stage {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 17rem;
+  overflow: hidden;
+  perspective: 900px;
+}
+
+.cards-cut-fan {
+  --cut-card-width: clamp(5.4rem, 28vw, 8.4rem);
+  position: relative;
+  width: min(100%, 42rem);
+  height: calc(var(--cut-card-width) / 0.7 + 2.5rem);
+  touch-action: none;
+  cursor: ew-resize;
+}
+
+.cards-cut-card {
+  position: absolute;
+  z-index: calc(var(--cut-card-index) + 1);
+  top: 1.2rem;
+  left: calc(
+    var(--cut-card-index) *
+    (100% - var(--cut-card-width)) /
+    var(--cut-denominator)
+  );
+  width: var(--cut-card-width);
+  aspect-ratio: 0.7;
+  padding: 0;
+  border: 2px solid #3d3028;
+  border-radius: 0.85rem;
+  box-shadow:
+    -0.2rem 0.35rem 0 rgba(234, 217, 184, 0.94),
+    0 0.65rem 1rem rgba(53, 34, 22, 0.2);
+  cursor: pointer;
+  transition: filter 120ms ease, transform 120ms ease;
+}
+
+.cards-cut-card,
+.cards-card-back {
+  background:
+    linear-gradient(135deg, transparent 45%, rgba(255, 241, 184, 0.26) 45% 55%, transparent 55%),
+    linear-gradient(45deg, transparent 45%, rgba(255, 241, 184, 0.2) 45% 55%, transparent 55%),
+    var(--accent-dark);
+  background-size: 1.15rem 1.15rem;
+  box-shadow: inset 0 0 0 0.45rem #fff1b8, inset 0 0 0 0.6rem #7d261d;
+}
+
+.cards-cut-card::after,
+.cards-card-back::after {
+  position: absolute;
+  inset: 22%;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 241, 184, 0.82);
+  border-radius: 50%;
+  color: #fff1b8;
+  content: "✦";
+  font-size: 2rem;
+}
+
+.cards-cut-card:focus-visible,
+.cards-cut-card-selected {
+  filter: brightness(1.18);
+  outline: 3px solid var(--yellow);
+  outline-offset: -3px;
+  transform: translateY(-0.35rem);
+}
+
+.cards-cut-boundary {
+  position: absolute;
+  z-index: 30;
+  top: 0.2rem;
+  bottom: 0.2rem;
+  left: calc(
+    var(--cut-card-index) *
+    (100% - var(--cut-card-width)) /
+    var(--cut-denominator)
+  );
+  width: 4px;
+  border-radius: 999px;
+  background: var(--yellow);
+  box-shadow: 0 0 0.7rem rgba(239, 189, 78, 0.9);
+  pointer-events: none;
+}
+
+.cards-cut-boundary::after {
+  position: absolute;
+  top: -0.15rem;
+  left: 50%;
+  color: var(--accent-dark);
+  content: "✂";
+  font-size: 1.2rem;
+  transform: translate(-50%, -100%) rotate(90deg);
+}
+
+.cards-cut-animating .cards-cut-boundary {
+  opacity: 0;
+}
+
+.cards-cut-animating .cards-cut-upper {
+  z-index: 0 !important;
+  animation: cards-cut-under 520ms cubic-bezier(.2,.75,.2,1) both;
+}
+
+.cards-cut-animating .cards-cut-lower {
+  z-index: 3 !important;
+  animation: cards-cut-over 520ms cubic-bezier(.2,.75,.2,1) both;
+}
+
+.cards-cut-hint {
+  max-width: 30rem;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.cards-deal-button {
+  min-width: min(100%, 14rem);
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cards-columns), minmax(0, 1fr));
+  gap: clamp(0.45rem, 1.8vw, 0.85rem);
+  width: min(100%, 38rem);
+  padding: 0.75rem;
+}
+
+.cards-slot {
+  position: relative;
+  aspect-ratio: 0.7;
+  min-width: 0;
+  border-radius: clamp(0.45rem, 1.6vw, 0.8rem);
+  perspective: 800px;
+}
+
+.cards-slot-empty {
+  border: 2px dashed rgba(61, 48, 40, 0.24);
+  background: rgba(230, 216, 193, 0.14);
+}
+
+.cards-slot-empty::after {
+  position: absolute;
+  inset: 42%;
+  border-radius: 50%;
+  background: rgba(61, 48, 40, 0.12);
+  content: "";
+}
+
+.cards-card {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  transform-style: preserve-3d;
+}
+
+.cards-card-inner {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-radius: inherit;
+  box-shadow: 0 0.6rem 1rem rgba(53, 34, 22, 0.2);
+  transform-style: preserve-3d;
+  transition: transform 420ms cubic-bezier(.2,.75,.2,1);
+}
+
+.cards-card-flipped .cards-card-inner {
+  transform: rotateY(180deg) translateY(-0.2rem);
+}
+
+.cards-card-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid #3d3028;
+  border-radius: inherit;
+  backface-visibility: hidden;
+}
+
+.cards-card-back {
+  position: absolute;
+}
+
+.cards-card-front {
+  padding: 0.45rem;
+  color: var(--ink);
+  background: #fff8e8;
+  font-size: clamp(0.72rem, 2.7vw, 1rem);
+  font-weight: 800;
+  line-height: 1.18;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transform: rotateY(180deg);
+}
+
+.cards-card.table-result-highlight .cards-card-inner {
+  box-shadow:
+    0 0 0 4px #fff1b8,
+    0 0 1.6rem rgba(239, 189, 78, 0.9),
+    0 1rem 1.3rem rgba(53, 34, 22, 0.24);
+  transform: rotateY(180deg) translateY(-0.55rem) scale(1.03);
+}
+
+.cards-grid-dealing .cards-slot {
+  animation: card-deal 420ms cubic-bezier(.2,.8,.25,1) both;
+  animation-delay: calc(var(--card-slot) * 28ms);
+}
+
+.cards-collecting .cards-slot:not(.cards-slot-empty) {
+  animation: card-collect 300ms ease-in both;
+  animation-delay: calc(var(--card-slot) * 12ms);
+}
+
 .reel-machine {
   display: grid;
   place-items: center;
@@ -934,6 +1166,47 @@ h1 {
 @keyframes result-reveal-pulse {
   0%, 100% { filter: brightness(1.08) saturate(1.1); }
   50% { filter: brightness(1.34) saturate(1.18); }
+}
+
+@keyframes card-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-7rem) rotate(-6deg) scale(0.72);
+  }
+}
+
+@keyframes card-collect {
+  to {
+    opacity: 0;
+    transform: translateY(-4rem) scale(0.72);
+  }
+}
+
+@keyframes cards-cut-under {
+  0% {
+    transform: translateY(-0.35rem);
+  }
+  42% {
+    transform: translateY(-2.3rem) rotate(-2deg);
+  }
+  72% {
+    transform: translate(var(--cut-gather-x), 1.1rem) scale(0.94);
+  }
+  100% {
+    transform: translate(var(--cut-gather-x), 0.2rem) scale(0.96);
+  }
+}
+
+@keyframes cards-cut-over {
+  0% {
+    transform: translateY(0);
+  }
+  58% {
+    transform: translateY(0.45rem);
+  }
+  100% {
+    transform: translate(var(--cut-gather-x), 0) scale(0.98);
+  }
 }
 
 @media (min-width: 44rem) {

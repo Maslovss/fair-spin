@@ -80,4 +80,54 @@ export class TickAudio {
     oscillator.start(now)
     oscillator.stop(now + 0.07)
   }
+
+  cardShuffle(enabled: boolean): void {
+    if (!enabled || !this.context) return
+    const now = this.context.currentTime
+    const buffer = this.context.createBuffer(1, Math.ceil(this.context.sampleRate * 0.16), this.context.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let index = 0; index < data.length; index += 1) {
+      data[index] = (Math.random() * 2 - 1) * (1 - index / data.length)
+    }
+    const source = this.context.createBufferSource()
+    const gain = this.context.createGain()
+    source.buffer = buffer
+    gain.gain.setValueAtTime(0.055, now)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16)
+    source.connect(gain)
+    gain.connect(this.context.destination)
+    source.start(now)
+  }
+
+  cardCut(enabled: boolean): void {
+    if (!enabled || !this.context) return
+    const now = this.context.currentTime
+    const oscillator = this.context.createOscillator()
+    const gain = this.context.createGain()
+    oscillator.type = 'square'
+    oscillator.frequency.setValueAtTime(145, now)
+    oscillator.frequency.exponentialRampToValueAtTime(85, now + 0.035)
+    gain.gain.setValueAtTime(0.06, now)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045)
+    oscillator.connect(gain)
+    gain.connect(this.context.destination)
+    oscillator.start(now)
+    oscillator.stop(now + 0.05)
+  }
+
+  cardFlip(enabled: boolean): void {
+    if (!enabled || !this.context) return
+    const now = this.context.currentTime
+    const oscillator = this.context.createOscillator()
+    const gain = this.context.createGain()
+    oscillator.type = 'triangle'
+    oscillator.frequency.setValueAtTime(210, now)
+    oscillator.frequency.exponentialRampToValueAtTime(115, now + 0.09)
+    gain.gain.setValueAtTime(0.05, now)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.1)
+    oscillator.connect(gain)
+    gain.connect(this.context.destination)
+    oscillator.start(now)
+    oscillator.stop(now + 0.11)
+  }
 }

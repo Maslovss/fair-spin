@@ -1,4 +1,4 @@
-import type { ReelLayout, TableId, WheelLayout } from '../state/types'
+import type { CardsLayout, ReelLayout, TableId, WheelLayout } from '../state/types'
 
 export const TABLE_LIMITS: Record<TableId, { min: number; max: number }> = {
   wheel: { min: 2, max: 30 },
@@ -21,19 +21,33 @@ export const resolveTableId = (remembered: TableId, itemCount: number): TableId 
   return availableTableIds(itemCount)[0] ?? 'slot'
 }
 
+export interface CardsLabels {
+  deck: string
+  cutHint: string
+  cutRequired: string
+  deal: string
+  dealing: string
+  cardBack(position: number): string
+  empty(position: number): string
+}
+
 export interface TableContext {
   items: string[]
-  layout: WheelLayout | ReelLayout
+  roundItems: string[]
+  layout: WheelLayout | ReelLayout | CardsLayout
+  drawn: string[]
   sound: boolean
   haptics: boolean
   reducedMotion: boolean
   ariaLabel: string
   interactive?: boolean
+  cardsLabels?: CardsLabels
+  canPrepare(): boolean
   onStart(): boolean
   onCancel(): void
   onResolved(index: number): void
   onSettled(): void
-  onLayout(layout: WheelLayout | ReelLayout): void
+  onLayout(layout: WheelLayout | ReelLayout | CardsLayout): void
   onWeakGesture(): void
   onInteraction?(): void
 }
