@@ -11,7 +11,7 @@ export const renderCemetery = (
   const header = document.createElement('div')
   header.className = 'cemetery-header'
   const title = document.createElement('h2')
-  title.textContent = t('round.cemetery')
+  title.textContent = t('round.order')
   const copy = document.createElement('button')
   copy.type = 'button'
   copy.className = 'text-button'
@@ -34,7 +34,7 @@ export const renderCemetery = (
   if (items.length === 0) {
     const empty = document.createElement('p')
     empty.className = 'cemetery-empty'
-    empty.textContent = t('round.cemeteryEmpty')
+    empty.textContent = t('round.orderEmpty')
     section.append(empty)
   } else {
     const list = document.createElement('ol')

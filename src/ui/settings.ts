@@ -5,7 +5,8 @@ export const openSettings = (
   host: HTMLElement,
   settings: Settings,
   t: Translate,
-  update: (settings: Settings, redraw: boolean) => void
+  update: (settings: Settings, redraw: boolean) => void,
+  addStarterQuestions: () => number
 ): void => {
   let current = { ...settings }
   const dialog = document.createElement('dialog')
@@ -50,14 +51,31 @@ export const openSettings = (
     dialog.close()
   })
   languageLabel.append(language)
+  const starterStatus = document.createElement('p')
+  starterStatus.className = 'settings-status'
+  starterStatus.setAttribute('role', 'status')
+  const addStarters = document.createElement('button')
+  addStarters.type = 'button'
+  addStarters.className = 'button button-quiet settings-starters'
+  addStarters.textContent = t('settings.addStarters')
+  addStarters.addEventListener('click', () => {
+    const added = addStarterQuestions()
+    starterStatus.textContent = t(
+      added > 0 ? 'settings.startersAdded' : 'settings.startersComplete',
+      { count: added }
+    )
+  })
   const close = document.createElement('button')
   close.type = 'button'
   close.className = 'button button-primary settings-close'
   close.textContent = t('settings.close')
   close.addEventListener('click', () => dialog.close())
-  form.append(languageLabel, close)
+  form.append(languageLabel, addStarters, starterStatus, close)
   dialog.append(form)
-  dialog.addEventListener('close', () => dialog.remove())
+  dialog.addEventListener('close', () => {
+    dialog.remove()
+    update(current, true)
+  })
   host.append(dialog)
   dialog.showModal()
 }

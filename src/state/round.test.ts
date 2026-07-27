@@ -4,13 +4,17 @@ import type { CryptoSource } from '../core/random'
 import { createPreset } from './presets'
 import {
   applyResult,
+  canPlayQuestion,
   canResetRound,
+  canStartNewRound,
   ensureCardsLayout,
   ensureLayout,
   ensureReelLayout,
   ensureWheelLayout,
   getLiveOrder,
+  getPosedQuestion,
   getRemainingItems,
+  needsRoundResetConfirmation,
   performFinalAct,
   setEliminationMode,
   setEliminationModeForPreset,
@@ -231,5 +235,48 @@ describe('round transitions', () => {
       positions: []
     })
     expect(next.tables.cards?.order.toSorted()).toEqual(preset.items.toSorted())
+  })
+
+  it('poses a template as a new round and returns dealt cards to the deck', () => {
+    const template = { ...preset, name: 'Who…?' }
+    const state = {
+      ...createPresetState(1, true),
+      question: 'takes out rubbish',
+      drawn: ['A', 'B'],
+      tables: {
+        cards: {
+          order: ['A', 'B', 'C', 'D'],
+          cutOffset: 0,
+          cut: true,
+          dealt: true,
+          positions: [0, 1, 2, 3]
+        }
+      }
+    }
+    expect(canPlayQuestion(template, { ...state, question: undefined })).toBe(false)
+    expect(canPlayQuestion(template, state)).toBe(true)
+    expect(getPosedQuestion(template, state)).toBe('Who takes out rubbish?')
+
+    const next = startNewRound(template, source(), state, 60, 'does dishes')
+    expect(next.question).toBe('does dishes')
+    expect(next.drawn).toEqual([])
+    expect(next.tables.cards).toMatchObject({
+      dealt: false,
+      cut: false,
+      positions: []
+    })
+    expect(getPosedQuestion(template, next)).toBe('Who does dishes?')
+  })
+
+  it('shows reset by question form and confirms only when the order is non-empty', () => {
+    const template = { ...preset, name: 'Who…?' }
+    const empty = createPresetState(1)
+    const played = { ...empty, drawn: ['A'] }
+
+    expect(canStartNewRound(template, empty)).toBe(true)
+    expect(canStartNewRound(preset, empty)).toBe(false)
+    expect(canStartNewRound(preset, played)).toBe(true)
+    expect(needsRoundResetConfirmation(empty)).toBe(false)
+    expect(needsRoundResetConfirmation(played)).toBe(true)
   })
 })

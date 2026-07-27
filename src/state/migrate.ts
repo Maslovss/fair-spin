@@ -15,7 +15,7 @@ const languages = new Set<Language>(['uk', 'en'])
 const tables = new Set(['wheel', 'slot', 'strip', 'cards'])
 
 export const cleanStored = (lang: Language = 'en'): Stored => ({
-  version: 2,
+  version: 3,
   presets: [],
   states: {},
   settings: {
@@ -45,7 +45,11 @@ interface StoredV1 {
   settings: Settings
 }
 
-const parsePresetV2 = (value: unknown): Preset | null => {
+interface StoredV2 extends Omit<Stored, 'version'> {
+  version: 2
+}
+
+const parsePreset = (value: unknown): Preset | null => {
   if (!isRecord(value)) return null
   if (
     typeof value.id !== 'string' ||
@@ -66,7 +70,7 @@ const parsePresetV2 = (value: unknown): Preset | null => {
 }
 
 const parsePresetV1 = (value: unknown): PresetV1 | null => {
-  const preset = parsePresetV2(value)
+  const preset = parsePreset(value)
   if (!preset || !isRecord(value) || typeof value.elimination !== 'boolean') return null
   return { ...preset, elimination: value.elimination }
 }
@@ -140,6 +144,7 @@ const parseStateBase = (value: unknown): Omit<PresetState, 'elimination'> | null
   }
   return {
     lastTable: (value.lastTable === 'reel' ? 'slot' : value.lastTable) as PresetState['lastTable'],
+    ...(typeof value.question === 'string' ? { question: value.question } : {}),
     drawn: value.drawn,
     tables: layouts,
     updatedAt: value.updatedAt
@@ -183,9 +188,11 @@ const parseV1 = (value: Record<string, unknown>): StoredV1 | null => {
   return { version: 1, presets: presets as PresetV1[], states, settings }
 }
 
-const parseV2 = (value: Record<string, unknown>): Stored | null => {
+const parseCurrentData = (
+  value: Record<string, unknown>
+): Omit<Stored, 'version'> | null => {
   if (!Array.isArray(value.presets) || !isRecord(value.states)) return null
-  const presets = value.presets.map(parsePresetV2)
+  const presets = value.presets.map(parsePreset)
   const settings = parseSettings(value.settings)
   if (presets.some((preset) => preset === null) || !settings) return null
   const states: Record<string, PresetState> = {}
@@ -194,10 +201,20 @@ const parseV2 = (value: Record<string, unknown>): Stored | null => {
     if (!state) return null
     states[id] = state
   }
-  return { version: 2, presets: presets as Preset[], states, settings }
+  return { presets: presets as Preset[], states, settings }
 }
 
-export const migrateV1toV2 = (data: StoredV1): Stored => {
+const parseV2 = (value: Record<string, unknown>): StoredV2 | null => {
+  const data = parseCurrentData(value)
+  return data ? { version: 2, ...data } : null
+}
+
+const parseV3 = (value: Record<string, unknown>): Stored | null => {
+  const data = parseCurrentData(value)
+  return data ? { version: 3, ...data } : null
+}
+
+export const migrateV1toV2 = (data: StoredV1): StoredV2 => {
   const modes = new Map(data.presets.map((preset) => [preset.id, preset.elimination]))
   const states: Record<string, PresetState> = {}
   for (const [id, state] of Object.entries(data.states)) {
@@ -215,15 +232,26 @@ export const migrateV1toV2 = (data: StoredV1): Stored => {
   return { version: 2, presets, states, settings: data.settings }
 }
 
+export const migrateV2toV3 = (data: StoredV2): Stored => ({
+  ...data,
+  version: 3
+})
+
 export const migrate = (raw: unknown, fallbackLang: Language = 'en'): Stored => {
   try {
     const value = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw
     if (!isRecord(value)) return cleanStored(fallbackLang)
     if (value.version === 1) {
       const parsed = parseV1(value)
-      return parsed ? migrateV1toV2(parsed) : cleanStored(fallbackLang)
+      return parsed
+        ? migrateV2toV3(migrateV1toV2(parsed))
+        : cleanStored(fallbackLang)
     }
-    if (value.version === 2) return parseV2(value) ?? cleanStored(fallbackLang)
+    if (value.version === 2) {
+      const parsed = parseV2(value)
+      return parsed ? migrateV2toV3(parsed) : cleanStored(fallbackLang)
+    }
+    if (value.version === 3) return parseV3(value) ?? cleanStored(fallbackLang)
     return cleanStored(fallbackLang)
   } catch {
     return cleanStored(fallbackLang)

@@ -32,11 +32,11 @@ export const renderPresetList = (
   eyebrow.className = 'eyebrow'
   eyebrow.textContent = t('brand')
   const title = document.createElement('h1')
-  title.textContent = t('presets.title')
+  title.textContent = t('questions.title')
   const tagline = document.createElement('p')
   tagline.textContent = t('tagline')
   identity.append(eyebrow, title, tagline)
-  header.append(identity, button(t('presets.settings'), 'button button-quiet', actions.settings))
+  header.append(identity, button(t('questions.settings'), 'button button-quiet', actions.settings))
 
   const grid = document.createElement('section')
   grid.className = 'preset-grid'
@@ -51,7 +51,7 @@ export const renderPresetList = (
     const cardTitle = document.createElement('h2')
     cardTitle.textContent = preset.name
     const meta = document.createElement('p')
-    meta.textContent = t('presets.count', { count: preset.items.length })
+    meta.textContent = t('questions.count', { count: preset.items.length })
     const preview = document.createElement('p')
     preview.className = 'preset-preview'
     preview.textContent = preset.items.slice(0, 4).join(' · ')
@@ -59,13 +59,13 @@ export const renderPresetList = (
     const actionsRow = document.createElement('div')
     actionsRow.className = 'card-actions'
     actionsRow.append(
-      button(t('presets.edit'), 'text-button', () => actions.edit(preset)),
-      button(t('presets.duplicate'), 'text-button', () => actions.duplicate(preset)),
-      button(t('presets.delete'), 'text-button danger', () => actions.delete(preset))
+      button(t('questions.edit'), 'text-button', () => actions.edit(preset)),
+      button(t('questions.duplicate'), 'text-button', () => actions.duplicate(preset)),
+      button(t('questions.delete'), 'text-button danger', () => actions.delete(preset))
     )
     card.append(cardMain, actionsRow)
     grid.append(card)
   })
 
-  root.append(header, grid, button(t('presets.new'), 'button button-primary floating-create', actions.create))
+  root.append(header, grid, button(t('questions.new'), 'button button-primary floating-create', actions.create))
 }

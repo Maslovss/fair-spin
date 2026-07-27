@@ -38,6 +38,7 @@ export interface TableLayouts {
 export interface PresetState {
   elimination: boolean
   lastTable: TableId
+  question?: string
   drawn: string[]
   tables: TableLayouts
   updatedAt: number
@@ -50,7 +51,7 @@ export interface Settings {
 }
 
 export interface Stored {
-  version: 2
+  version: 3
   presets: Preset[]
   states: Record<PresetId, PresetState>
   settings: Settings

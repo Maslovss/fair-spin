@@ -5,13 +5,21 @@ import {
   type TableLifecycleState
 } from './core/reveal'
 import { createCardsLayout } from './core/cards'
+import {
+  isPlaceholderCompletion,
+  isQuestionTemplate,
+  questionTemplateParts
+} from './core/question'
 import { CurrentTableResult } from './core/result-label'
 import {
   applyResult,
-  canResetRound,
+  canPlayQuestion,
+  canStartNewRound,
   ensureLayout,
+  getPosedQuestion,
   getLiveOrder,
   getRemainingItems,
+  needsRoundResetConfirmation,
   performFinalAct,
   setEliminationModeForPreset,
   startNewRound,
@@ -28,9 +36,12 @@ import {
   type WheelLayout
 } from './state/types'
 import {
+  addStarterPresets,
+  assertUniquePresetName,
   duplicatePreset,
   createPresetStateForPreset,
   removePreset,
+  nextUniquePresetName,
   seedStarterPresets
 } from './state/presets'
 import { PersistedStore, STORAGE_KEY } from './state/store'
@@ -44,6 +55,7 @@ import { renderCemetery } from './ui/cemetery'
 import { openPresetEditor } from './ui/preset-editor'
 import { renderPresetList } from './ui/preset-list'
 import { openSettings } from './ui/settings'
+import { openQuestionPrompt } from './ui/question-prompt'
 
 const root = document.querySelector<HTMLElement>('#app')
 if (!root) throw new Error('Application root is missing')
@@ -73,6 +85,7 @@ const actionButton = (label: string, className: string, action: () => void): HTM
 
 const updatePresetInStore = (next: Preset, previous?: Preset): void => {
   store.update((stored) => {
+    assertUniquePresetName(stored.presets, next.name, previous?.id)
     if (!previous) {
       return {
         ...stored,
@@ -93,13 +106,21 @@ const updatePresetInStore = (next: Preset, previous?: Preset): void => {
 
 const editPreset = (preset?: Preset): void => {
   const t = translator(store.get().settings.lang)
-  openPresetEditor(root, t, preset, updatePresetInStore)
+  openPresetEditor(root, t, preset, store.get().presets, updatePresetInStore)
 }
 
 const showSettings = (): void => {
   const settings = store.get().settings
   openSettings(root, settings, translator(settings.lang), (next, redraw) => {
     store.update((stored) => ({ ...stored, settings: next }), redraw)
+  }, () => {
+    let added = 0
+    store.update((stored) => {
+      const result = addStarterPresets(stored, stored.settings.lang)
+      added = result.added
+      return result.stored
+    }, false)
+    return added
   })
 }
 
@@ -113,14 +134,20 @@ const renderList = (stored: Stored, t: Translate): void => {
     },
     edit: editPreset,
     duplicate: (preset) => {
-      const duplicate = duplicatePreset(preset, t('presets.copyName', { name: preset.name }))
+      const duplicate = duplicatePreset(
+        preset,
+        nextUniquePresetName(
+          store.get().presets,
+          t('questions.copyName', { name: preset.name })
+        )
+      )
       store.update((value) => ({
         ...value,
         presets: [...value.presets, duplicate]
       }))
     },
     delete: (preset) => {
-      if (window.confirm(t('presets.deleteConfirm', { name: preset.name }))) {
+      if (window.confirm(t('questions.deleteConfirm', { name: preset.name }))) {
         store.replace(removePreset(store.get(), preset.id))
       }
     },
@@ -146,7 +173,7 @@ const persistPresetState = (
 const resetRound = (preset: Preset, t: Translate): void => {
   const state = store.get().states[preset.id] ?? createPresetStateForPreset(preset)
   if (
-    canResetRound(state) &&
+    needsRoundResetConfirmation(state) &&
     !window.confirm(t('round.confirmReset', {
       drawn: state.drawn.length,
       total: preset.items.length
@@ -155,6 +182,34 @@ const resetRound = (preset: Preset, t: Translate): void => {
   dismissedResume.add(preset.id)
   currentTableResult.clear()
   persistPresetState(preset.id, (current) => startNewRound(preset, crypto, current))
+}
+
+const poseNewQuestion = (preset: Preset, state: PresetState, t: Translate): void => {
+  openQuestionPrompt(
+    root,
+    t,
+    (value) => {
+      if (
+        needsRoundResetConfirmation(state) &&
+        !window.confirm(t('round.confirmReset', {
+          drawn: state.drawn.length,
+          total: preset.items.length
+        }))
+      ) return false
+      const completion = value || t('question.placeholder')
+      dismissedResume.add(preset.id)
+      currentTableResult.clear()
+      persistPresetState(
+        preset.id,
+        (current) => startNewRound(preset, crypto, current, Date.now(), completion)
+      )
+      return true
+    },
+    () => {
+      activePresetId = null
+      render()
+    }
+  )
 }
 
 const copyOrder = async (items: readonly string[], status: HTMLElement, t: Translate): Promise<void> => {
@@ -287,6 +342,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     Math.max(2, remaining.length)
   )
   const tableId = registration.id
+  const template = isQuestionTemplate(preset.name)
+  const canPlay = canPlayQuestion(preset, state)
   currentTableResult.enter(preset.id, tableId)
   state = ensureLayout(tableId, preset, state, crypto)
   if (state.lastTable !== tableId) state = { ...state, lastTable: tableId }
@@ -303,8 +360,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
     ? [...activeLayout.order]
     : getLiveOrder(activeLayout.order, state.elimination ? state.drawn : [])
   let currentTableItems = [...liveOrder]
-  const completed = state.elimination && remaining.length === 0
-  const finalAct = state.elimination && remaining.length === 1 && tableId !== 'cards'
+  const completed = canPlay && state.elimination && remaining.length === 0
+  const finalAct = canPlay && state.elimination && remaining.length === 1 && tableId !== 'cards'
 
   const page = document.createElement('main')
   page.className = 'game-page'
@@ -320,9 +377,76 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   eyebrow.className = 'eyebrow'
   eyebrow.textContent = t('brand')
   const title = document.createElement('h1')
-  title.textContent = preset.name
+  const posedTitle = getPosedQuestion(preset, state)
+  if (template && state.question !== undefined) {
+    const parts = questionTemplateParts(preset.name)
+    const before = parts?.before ?? ''
+    title.append(document.createTextNode(before ? `${before} ` : ''))
+    const completion = document.createElement('span')
+    completion.className = 'question-completion'
+    completion.textContent = state.question
+    title.append(completion, document.createTextNode(parts?.after ?? ''))
+  } else {
+    title.textContent = posedTitle
+  }
+  if (template) {
+    title.classList.add('question-title-action')
+    title.tabIndex = 0
+    title.setAttribute('role', 'button')
+    title.setAttribute('aria-label', t('question.poseTitle'))
+    const openQuestion = () => poseNewQuestion(preset, state, t)
+    title.addEventListener('click', openQuestion)
+    title.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') openQuestion()
+    })
+  }
   titleGroup.append(eyebrow, title)
-  header.append(back, titleGroup, actionButton(t('game.edit'), 'button button-quiet', () => editPreset(preset)))
+  const headerActions = document.createElement('div')
+  headerActions.className = 'game-header-actions'
+  if (template) {
+    headerActions.append(actionButton(
+      t('question.new'),
+      'button button-quiet question-new',
+      () => poseNewQuestion(preset, state, t)
+    ))
+  } else if (canStartNewRound(preset, state)) {
+    headerActions.append(actionButton(
+      t('round.new'),
+      'button button-quiet',
+      () => resetRound(preset, t)
+    ))
+  }
+  if (
+    template &&
+    state.question !== undefined &&
+    !isPlaceholderCompletion(state.question)
+  ) {
+    const menu = document.createElement('details')
+    menu.className = 'question-menu'
+    const summary = document.createElement('summary')
+    summary.textContent = t('question.menu')
+    const saveCopy = actionButton(
+      t('question.saveCopy'),
+      'text-button question-save-copy',
+      () => {
+        if (!window.confirm(t('question.saveCopyConfirm'))) return
+        openPresetEditor(
+          root,
+          t,
+          undefined,
+          store.get().presets,
+          updatePresetInStore,
+          { name: posedTitle, items: [...preset.items] }
+        )
+      }
+    )
+    menu.append(summary, saveCopy)
+    headerActions.append(menu)
+  }
+  headerActions.append(
+    actionButton(t('game.edit'), 'button button-quiet', () => editPreset(preset))
+  )
+  header.append(back, titleGroup, headerActions)
   page.append(header)
 
   if (
@@ -372,7 +496,19 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
 
   const controls = document.createElement('div')
   controls.className = 'game-controls'
-  if (completed) {
+  if (!canPlay) {
+    const required = document.createElement('p')
+    required.className = 'question-required'
+    required.textContent = t('question.required')
+    controls.append(
+      required,
+      actionButton(
+        t('question.pose'),
+        'button button-primary question-pose',
+        () => poseNewQuestion(preset, state, t)
+      )
+    )
+  } else if (completed) {
     const complete = document.createElement('div')
     complete.className = 'round-complete'
     const completeTitle = document.createElement('h2')
@@ -399,6 +535,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       'button button-primary luck-button',
       () => activeTable?.tryLuck()
     )
+    luck.disabled = !canPlay
     controls.append(luck)
   } else {
     const unavailable = document.createElement('p')
@@ -497,7 +634,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       haptics: settings.haptics,
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
       ariaLabel: tableAriaLabel(tableId, t),
-      interactive: !finalAct,
+      interactive: canPlay && !finalAct,
       cardsLabels: tableId === 'cards' ? {
         deck: t('cards.deck'),
         cutHint: t('cards.cutHint'),
@@ -507,8 +644,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         cardBack: (position) => t('cards.cardBack', { position }),
         empty: (position) => t('cards.empty', { position })
       } : undefined,
-      canPrepare: () => lifecycle.state === 'idle',
-      onStart: () => lifecycle.tryStart(),
+      canPrepare: () => canPlay && lifecycle.state === 'idle',
+      onStart: () => canPlay && lifecycle.tryStart(),
       onCancel: () => {
         lifecycle.cancelStart()
       },

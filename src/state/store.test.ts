@@ -45,7 +45,7 @@ describe('storage migration', () => {
       settings: { sound: true, haptics: false, lang: 'uk' }
     }
     const migrated = migrate(legacy)
-    expect(migrated.version).toBe(2)
+    expect(migrated.version).toBe(3)
     expect(migrated.presets[0]).not.toHaveProperty('elimination')
     expect(migrated.states.players).toMatchObject({
       elimination: true,
@@ -54,7 +54,7 @@ describe('storage migration', () => {
     })
   })
 
-  it('creates v2 state for a legacy preset that had no state yet', () => {
+  it('creates current state for a legacy preset that had no state yet', () => {
     const migrated = migrate({
       version: 1,
       presets: [{
@@ -71,7 +71,7 @@ describe('storage migration', () => {
     expect(migrated.states.fresh).toMatchObject({ elimination: false, drawn: [], updatedAt: 4 })
   })
 
-  it('does not migrate version 2 a second time', () => {
+  it('upgrades version 2 without changing its data', () => {
     const current = {
       ...cleanStored('uk'),
       presets: [{ id: 'p', name: 'P', items: ['A', 'B'], createdAt: 1, updatedAt: 2 }],
@@ -85,7 +85,25 @@ describe('storage migration', () => {
         }
       }
     }
-    expect(migrate(current)).toEqual(current)
+    expect(migrate(current)).toEqual({ ...current, version: 3 })
+  })
+
+  it('restores a posed template question with the rest of a v3 round', () => {
+    const current = {
+      ...cleanStored('uk'),
+      presets: [{ id: 'p', name: 'Хто…?', items: ['A', 'B'], createdAt: 1, updatedAt: 2 }],
+      states: {
+        p: {
+          elimination: true,
+          lastTable: 'wheel' as const,
+          question: 'миє посуд',
+          drawn: ['A'],
+          tables: { wheel: { order: ['A', 'B'], angle: 1.5 } },
+          updatedAt: 3
+        }
+      }
+    }
+    expect(migrate(JSON.stringify(current))).toEqual(current)
   })
 
   it('maps the unused legacy reel table id to slot', () => {

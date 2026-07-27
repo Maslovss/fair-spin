@@ -1,6 +1,8 @@
 import type { Translate } from '../io/i18n'
 import {
+  MAX_NAME_LENGTH,
   PresetValidationError,
+  assertUniquePresetName,
   createPreset,
   parseBulkItems,
   updatePreset
@@ -11,7 +13,9 @@ export const openPresetEditor = (
   host: HTMLElement,
   t: Translate,
   preset: Preset | undefined,
-  save: (next: Preset, previous?: Preset) => void
+  presets: readonly Preset[],
+  save: (next: Preset, previous?: Preset) => void,
+  initial?: { name: string; items: string[] }
 ): void => {
   const dialog = document.createElement('dialog')
   dialog.className = 'dialog editor-dialog'
@@ -24,10 +28,10 @@ export const openPresetEditor = (
   nameLabel.textContent = t('editor.name')
   const name = document.createElement('input')
   name.name = 'name'
-  name.maxLength = 80
+  name.maxLength = MAX_NAME_LENGTH
   name.required = true
   name.placeholder = t('editor.namePlaceholder')
-  name.value = preset?.name ?? ''
+  name.value = preset?.name ?? initial?.name ?? ''
   nameLabel.append(name)
 
   const itemsLabel = document.createElement('label')
@@ -36,7 +40,7 @@ export const openPresetEditor = (
   items.name = 'items'
   items.rows = 10
   items.placeholder = t('editor.itemsPlaceholder')
-  items.value = preset?.items.join('\n') ?? ''
+  items.value = preset?.items.join('\n') ?? initial?.items.join('\n') ?? ''
   const help = document.createElement('small')
   help.textContent = t('editor.itemsHelp')
   itemsLabel.append(items, help)
@@ -65,11 +69,18 @@ export const openPresetEditor = (
         items: parseBulkItems(items.value)
       }
       const next = preset ? updatePreset(preset, input) : createPreset(input)
+      assertUniquePresetName(presets, next.name, preset?.id)
       save(next, preset)
       dialog.close()
     } catch (caught) {
       if (caught instanceof PresetValidationError) {
-        error.textContent = t(caught.code === 'name-required' ? 'editor.error.name' : 'editor.error.items')
+        error.textContent = t(
+          caught.code === 'name-required'
+            ? 'editor.error.name'
+            : caught.code === 'duplicate-name'
+              ? 'editor.error.duplicate'
+              : 'editor.error.items'
+        )
       } else {
         throw caught
       }

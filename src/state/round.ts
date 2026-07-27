@@ -1,5 +1,6 @@
 import { shuffle, type CryptoSource } from '../core/random'
 import { cardsGridColumns, createCardsLayout } from '../core/cards'
+import { isQuestionTemplate, poseQuestion } from '../core/question'
 import { insertAtRandom } from './presets'
 import {
   createPresetState,
@@ -25,6 +26,20 @@ export const getRemainingItems = (preset: Preset, state: PresetState): string[] 
 
 export const getLiveOrder = (order: readonly string[], drawn: readonly string[]): string[] =>
   removeOccurrences(order, drawn)
+
+export const canPlayQuestion = (preset: Preset, state: PresetState): boolean =>
+  !isQuestionTemplate(preset.name) || state.question !== undefined
+
+export const canStartNewRound = (preset: Preset, state: PresetState): boolean =>
+  isQuestionTemplate(preset.name) || state.drawn.length > 0
+
+export const needsRoundResetConfirmation = (state: PresetState): boolean =>
+  state.drawn.length > 0
+
+export const getPosedQuestion = (preset: Preset, state: PresetState): string =>
+  isQuestionTemplate(preset.name) && state.question !== undefined
+    ? poseQuestion(preset.name, state.question)
+    : preset.name
 
 const reconcileOrder = (
   order: readonly string[],
@@ -190,8 +205,12 @@ export const syncEditedPreset = (
       : createCardsLayout(next.items, source)
     : undefined
   void previous
+  const { question: _question, ...stateWithoutQuestion } = state
   return {
-    ...state,
+    ...stateWithoutQuestion,
+    ...(isQuestionTemplate(next.name) && state.question !== undefined
+      ? { question: state.question }
+      : {}),
     drawn,
     tables: {
       ...(wheel && { wheel }),
@@ -206,23 +225,28 @@ export const startNewRound = (
   preset: Preset,
   source: CryptoSource,
   state: PresetState = createPresetState(),
-  now = Date.now()
-): PresetState => ({
-  ...state,
-  drawn: [],
-  tables: {
-    ...(state.tables.wheel && {
-      wheel: { order: shuffle(preset.items, source), angle: state.tables.wheel.angle }
-    }),
-    ...(state.tables.reel && {
-      reel: { order: shuffle(preset.items, source), offset: state.tables.reel.offset }
-    }),
-    ...(state.tables.cards && {
-      cards: createCardsLayout(preset.items, source)
-    })
-  },
-  updatedAt: now
-})
+  now = Date.now(),
+  question = state.question
+): PresetState => {
+  const { question: _previousQuestion, ...stateWithoutQuestion } = state
+  return {
+    ...stateWithoutQuestion,
+    ...(question !== undefined ? { question } : {}),
+    drawn: [],
+    tables: {
+      ...(state.tables.wheel && {
+        wheel: { order: shuffle(preset.items, source), angle: state.tables.wheel.angle }
+      }),
+      ...(state.tables.reel && {
+        reel: { order: shuffle(preset.items, source), offset: state.tables.reel.offset }
+      }),
+      ...(state.tables.cards && {
+        cards: createCardsLayout(preset.items, source)
+      })
+    },
+    updatedAt: now
+  }
+}
 
 export const setEliminationMode = (
   state: PresetState,

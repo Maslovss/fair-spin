@@ -343,6 +343,64 @@ h1 {
   margin-bottom: 1rem;
 }
 
+.game-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.question-title-action {
+  cursor: pointer;
+}
+
+.question-title-action:focus-visible {
+  outline: 3px solid var(--yellow);
+  outline-offset: 0.2rem;
+}
+
+.question-completion {
+  color: var(--muted);
+}
+
+.question-required {
+  max-width: 28rem;
+  margin: 0;
+  color: var(--accent-dark);
+  font-weight: 800;
+  text-align: center;
+}
+
+.question-menu {
+  position: relative;
+}
+
+.question-menu summary {
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  font-weight: 800;
+  list-style: none;
+}
+
+.question-menu[open] .question-save-copy {
+  position: absolute;
+  z-index: 20;
+  top: 100%;
+  right: 0;
+  width: max-content;
+  max-width: min(20rem, 85vw);
+  padding: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+
+.settings-status {
+  min-height: 1.4rem;
+  color: var(--muted);
+}
+
 .game-header .back-button {
   grid-column: 1 / -1;
   justify-self: start;

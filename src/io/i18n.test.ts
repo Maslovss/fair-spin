@@ -8,8 +8,8 @@ describe('localization', () => {
   })
 
   it('translates and interpolates interface strings', () => {
-    expect(translator('en')('presets.count', { count: 4 })).toBe('4 items')
-    expect(translator('uk')('presets.count', { count: 4 })).toBe('4 елементів')
+    expect(translator('en')('questions.count', { count: 4 })).toBe('4 items')
+    expect(translator('uk')('questions.count', { count: 4 })).toBe('4 елементів')
   })
 
   it('formats recent activity without hard-coded date text', () => {
