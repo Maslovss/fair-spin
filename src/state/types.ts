@@ -1,5 +1,5 @@
 export type PresetId = string
-export type TableId = 'wheel' | 'reel' | 'cards'
+export type TableId = 'wheel' | 'slot' | 'strip' | 'cards'
 export type Language = 'uk' | 'en'
 
 export interface Preset {

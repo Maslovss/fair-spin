@@ -6,6 +6,37 @@ interface GestureSample {
   time: number
 }
 
+export class AxisHistory {
+  private readonly samples: GestureSample[] = []
+
+  constructor(
+    private readonly windowMs = 100,
+    private readonly capacity = 32
+  ) {}
+
+  reset(position: number, time: number): void {
+    this.samples.length = 0
+    this.samples.push({ angle: position, time })
+  }
+
+  push(position: number, time: number): void {
+    this.samples.push({ angle: position, time })
+    while (this.samples.length > this.capacity) this.samples.shift()
+  }
+
+  velocity(atTime?: number): number {
+    const latest = this.samples.at(-1)
+    if (!latest || this.samples.length < 2) return 0
+    const endTime = atTime ?? latest.time
+    const cutoff = endTime - this.windowMs
+    const inWindow = this.samples.filter((sample) => sample.time >= cutoff && sample.time <= endTime)
+    const first = inWindow[0]
+    const last = inWindow.at(-1)
+    if (!first || !last || last.time <= first.time) return 0
+    return (last.angle - first.angle) / ((last.time - first.time) / 1_000)
+  }
+}
+
 export class AngleHistory {
   private readonly samples: GestureSample[] = []
   private unwrappedAngle = 0
@@ -116,6 +147,77 @@ export class WheelGesture {
     if (event.pointerId !== this.activePointer) return
     this.releaseCapture(event.pointerId)
     this.callbacks.onWeak()
+  }
+
+  private releaseCapture(pointerId: number): void {
+    if (this.element.hasPointerCapture(pointerId)) this.element.releasePointerCapture(pointerId)
+    this.activePointer = null
+  }
+}
+
+export interface LinearGestureCallbacks {
+  onStart?(): boolean | void
+  onDrag(delta: number): void
+  onRelease(velocity: number): void
+  onCancel(): void
+}
+
+export class LinearGesture {
+  private activePointer: number | null = null
+  private startPosition = 0
+  private readonly history = new AxisHistory()
+
+  constructor(
+    private readonly element: HTMLElement,
+    private readonly axis: 'x' | 'y',
+    private readonly callbacks: LinearGestureCallbacks
+  ) {
+    element.style.touchAction = 'none'
+    element.addEventListener('pointerdown', this.onPointerDown)
+    element.addEventListener('pointermove', this.onPointerMove)
+    element.addEventListener('pointerup', this.onPointerUp)
+    element.addEventListener('pointercancel', this.onPointerCancel)
+  }
+
+  destroy(): void {
+    this.element.removeEventListener('pointerdown', this.onPointerDown)
+    this.element.removeEventListener('pointermove', this.onPointerMove)
+    this.element.removeEventListener('pointerup', this.onPointerUp)
+    this.element.removeEventListener('pointercancel', this.onPointerCancel)
+  }
+
+  private position(event: PointerEvent): number {
+    return this.axis === 'x' ? event.clientX : event.clientY
+  }
+
+  private readonly onPointerDown = (event: PointerEvent): void => {
+    if (this.activePointer !== null || event.button !== 0) return
+    if (this.callbacks.onStart?.() === false) return
+    this.activePointer = event.pointerId
+    this.startPosition = this.position(event)
+    this.history.reset(this.startPosition, event.timeStamp)
+    this.element.setPointerCapture(event.pointerId)
+  }
+
+  private readonly onPointerMove = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activePointer) return
+    const position = this.position(event)
+    this.history.push(position, event.timeStamp)
+    this.callbacks.onDrag(position - this.startPosition)
+  }
+
+  private readonly onPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activePointer) return
+    this.history.push(this.position(event), event.timeStamp)
+    const velocity = this.history.velocity(event.timeStamp)
+    this.releaseCapture(event.pointerId)
+    this.callbacks.onRelease(velocity)
+  }
+
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activePointer) return
+    this.releaseCapture(event.pointerId)
+    this.callbacks.onCancel()
   }
 
   private releaseCapture(pointerId: number): void {

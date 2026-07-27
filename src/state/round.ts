@@ -92,7 +92,7 @@ export const ensureLayout = (
   source: CryptoSource
 ): PresetState => {
   if (table === 'wheel') return ensureWheelLayout(preset, state, source).state
-  if (table === 'reel') return ensureReelLayout(preset, state, source).state
+  if (table === 'slot' || table === 'strip') return ensureReelLayout(preset, state, source).state
   return ensureCardsLayout(preset, state, source).state
 }
 

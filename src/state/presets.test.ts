@@ -36,6 +36,8 @@ describe('presets', () => {
     let stored = { ...cleanStored(), presets: [preset] }
     stored = setLastTable(stored, preset.id, 'cards', 2)
     expect(stored.states[preset.id]?.lastTable).toBe('cards')
+    stored = setLastTable(stored, preset.id, 'strip', 2.5)
+    expect(stored.states[preset.id]?.lastTable).toBe('strip')
     const updated = updatePreset(preset, { name: 'B', items: ['1', '2', '3'] }, 3)
     expect(updated).toMatchObject({ name: 'B', updatedAt: 3 })
     stored = removePreset(stored, preset.id)

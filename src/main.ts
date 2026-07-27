@@ -3,7 +3,7 @@ import { detectLanguage, relativeTime, translator, type Translate } from './io/i
 import {
   applyResult,
   canResetRound,
-  ensureWheelLayout,
+  ensureLayout,
   getLiveOrder,
   getRemainingItems,
   performFinalAct,
@@ -15,7 +15,9 @@ import {
   createPresetState,
   type Preset,
   type PresetState,
+  type ReelLayout,
   type Stored,
+  type TableId,
   type WheelLayout
 } from './state/types'
 import {
@@ -25,8 +27,12 @@ import {
   seedStarterPresets
 } from './state/presets'
 import { PersistedStore, STORAGE_KEY } from './state/store'
-import { WheelTable } from './tables/wheel'
-import { isTableAvailable } from './tables/table'
+import {
+  availableTableRegistrations,
+  createRegisteredTable,
+  type TableRegistration
+} from './tables/registry'
+import type { Table } from './tables/table'
 import { renderCemetery } from './ui/cemetery'
 import { openPresetEditor } from './ui/preset-editor'
 import { renderPresetList } from './ui/preset-list'
@@ -40,7 +46,7 @@ const store = new PersistedStore(localStorage, detectLanguage())
 if (wasFirstLaunch) store.replace(seedStarterPresets(store.get()), false)
 
 let activePresetId: string | null = null
-let wheel: WheelTable | null = null
+let activeTable: Table | null = null
 const dismissedResume = new Set<string>()
 const lastResults = new Map<string, string>()
 let statusTimer: ReturnType<typeof setTimeout> | null = null
@@ -203,19 +209,55 @@ const createModeSwitch = (
   return group
 }
 
+const tableLabel = (id: TableId, t: Translate): string => {
+  if (id === 'wheel') return t('game.wheel')
+  if (id === 'slot') return t('game.slot')
+  if (id === 'strip') return t('game.strip')
+  return t('game.cards')
+}
+
+const tableAriaLabel = (id: TableId, t: Translate): string => {
+  if (id === 'wheel') return t('game.wheelLabel')
+  if (id === 'slot') return t('game.slotLabel')
+  if (id === 'strip') return t('game.stripLabel')
+  return t('game.cards')
+}
+
+const weakGestureLabel = (id: TableId, t: Translate): string => {
+  if (id === 'slot') return t('game.weakSlot')
+  if (id === 'strip') return t('game.weakStrip')
+  return t('game.weak')
+}
+
+const resolveRegistration = (
+  remembered: TableId,
+  itemCount: number
+): { active: TableRegistration; available: TableRegistration[] } => {
+  const available = availableTableRegistrations(itemCount)
+  const active = available.find(({ id }) => id === remembered) ?? available[0]
+  if (!active) throw new Error('No table is available for the current item count')
+  return { active, available }
+}
+
 const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   const settings = stored.settings
   let state = stored.states[preset.id] ?? createPresetStateForPreset(preset)
-  const ensured = ensureWheelLayout(preset, state, crypto)
-  state = ensured.state
+  const remaining = getRemainingItems(preset, state)
+  const { active: registration, available: availableTables } = resolveRegistration(
+    state.lastTable,
+    Math.max(2, remaining.length)
+  )
+  const tableId = registration.id
+  state = ensureLayout(tableId, preset, state, crypto)
+  if (state.lastTable !== tableId) state = { ...state, lastTable: tableId }
   if (stored.states[preset.id] !== state) {
     persistPresetState(preset.id, () => state, false)
   }
-  const remaining = getRemainingItems(preset, state)
-  const liveOrder = getLiveOrder(ensured.layout.order, state.elimination ? state.drawn : [])
+  const activeLayout = tableId === 'wheel' ? state.tables.wheel : state.tables.reel
+  if (!activeLayout) throw new Error(`Layout was not created for table: ${tableId}`)
+  const liveOrder = getLiveOrder(activeLayout.order, state.elimination ? state.drawn : [])
   const completed = state.elimination && remaining.length === 0
   const finalAct = state.elimination && remaining.length === 1
-  const wheelAvailable = isTableAvailable('wheel', liveOrder.length)
 
   const page = document.createElement('main')
   page.className = 'game-page'
@@ -254,9 +296,18 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   tableChoiceGroup.className = 'table-choice-group'
   const switcherLabel = document.createElement('span')
   switcherLabel.textContent = t('game.table')
-  const wheelChoice = actionButton(t('game.wheel'), 'table-choice active', () => undefined)
-  wheelChoice.setAttribute('aria-pressed', 'true')
-  tableChoiceGroup.append(switcherLabel, wheelChoice)
+  tableChoiceGroup.append(switcherLabel)
+  availableTables.forEach(({ id }) => {
+    const choice = actionButton(tableLabel(id, t), 'table-choice', () => {
+      persistPresetState(preset.id, (current) => ({
+        ...current,
+        lastTable: id,
+        updatedAt: Date.now()
+      }))
+    })
+    choice.setAttribute('aria-pressed', String(id === tableId))
+    tableChoiceGroup.append(choice)
+  })
   switcher.append(tableChoiceGroup, createModeSwitch(preset, state, t))
   tableArea.append(switcher)
 
@@ -266,9 +317,9 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   const rememberedResult = lastResults.get(preset.id)
   if (rememberedResult) status.textContent = t('game.result', { item: rememberedResult })
 
-  const wheelHost = document.createElement('div')
-  wheelHost.className = 'wheel-host'
-  tableArea.append(wheelHost)
+  const tableHost = document.createElement('div')
+  tableHost.className = 'table-host'
+  tableArea.append(tableHost)
 
   const controls = document.createElement('div')
   controls.className = 'game-controls'
@@ -289,8 +340,12 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
       'button button-primary final-act',
       () => persistPresetState(preset.id, (current) => performFinalAct(preset, current))
     ))
-  } else if (wheelAvailable) {
-    const luck = actionButton(t('game.tryLuck'), 'button button-primary luck-button', () => wheel?.tryLuck())
+  } else if (liveOrder.length >= 2) {
+    const luck = actionButton(
+      t('game.tryLuck'),
+      'button button-primary luck-button',
+      () => activeTable?.tryLuck()
+    )
     controls.append(luck)
   } else {
     const unavailable = document.createElement('p')
@@ -312,20 +367,23 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   page.append(layout)
   root.append(page)
 
-  if (!completed && (finalAct || wheelAvailable)) {
-    wheel = new WheelTable()
-    wheel.mount(wheelHost, {
+  if (!completed) {
+    activeTable = createRegisteredTable(tableId)
+    activeTable.mount(tableHost, {
       items: liveOrder,
-      layout: ensured.layout,
+      layout: activeLayout,
       sound: settings.sound,
       haptics: settings.haptics,
       reducedMotion: window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-      ariaLabel: t('game.wheelLabel'),
+      ariaLabel: tableAriaLabel(tableId, t),
       interactive: !finalAct,
-      onLayout: (next: WheelLayout) => {
+      onLayout: (next: WheelLayout | ReelLayout) => {
         persistPresetState(preset.id, (current) => ({
           ...current,
-          tables: { ...current.tables, wheel: next },
+          tables: {
+            ...current.tables,
+            ...('angle' in next ? { wheel: next } : { reel: next })
+          },
           updatedAt: Date.now()
         }), false)
       },
@@ -342,7 +400,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         }
       },
       onWeakGesture: () => {
-        status.textContent = t('game.weak')
+        status.textContent = weakGestureLabel(tableId, t)
         if (statusTimer !== null) clearTimeout(statusTimer)
         statusTimer = setTimeout(() => {
           status.textContent = rememberedResult ? t('game.result', { item: rememberedResult }) : ''
@@ -357,8 +415,8 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
 }
 
 const render = (): void => {
-  wheel?.unmount()
-  wheel = null
+  activeTable?.unmount()
+  activeTable = null
   root.replaceChildren()
   const stored = store.get()
   const t = translator(stored.settings.lang)

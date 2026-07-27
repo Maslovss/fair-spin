@@ -87,6 +87,26 @@ describe('storage migration', () => {
     }
     expect(migrate(current)).toEqual(current)
   })
+
+  it('maps the unused legacy reel table id to slot', () => {
+    const current = {
+      ...cleanStored('en'),
+      presets: [{ id: 'p', name: 'P', items: ['A', 'B'], createdAt: 1, updatedAt: 2 }],
+      states: {
+        p: {
+          elimination: false,
+          lastTable: 'reel',
+          drawn: [],
+          tables: { reel: { order: ['A', 'B'], offset: 4.5 } },
+          updatedAt: 3
+        }
+      }
+    }
+    expect(migrate(current).states.p).toMatchObject({
+      lastTable: 'slot',
+      tables: { reel: { offset: 4.5 } }
+    })
+  })
 })
 
 describe('PersistedStore', () => {

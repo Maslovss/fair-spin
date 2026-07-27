@@ -423,11 +423,17 @@ h1 {
 
 .table-choice {
   padding: 0.55rem 0.9rem;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  color: #fffaf0;
-  background: var(--ink);
+  color: var(--muted);
+  background: rgba(255, 250, 240, 0.72);
   letter-spacing: 0;
   text-transform: none;
+}
+
+.table-choice[aria-pressed="true"] {
+  color: #fffaf0;
+  background: var(--ink);
 }
 
 .mode-switch {
@@ -465,11 +471,173 @@ h1 {
   box-shadow: 0 4px 10px rgba(158, 61, 39, 0.18);
 }
 
-.wheel-host {
+.table-host {
   display: grid;
   place-items: center;
   min-height: min(88vw, 32rem);
   padding: 0.7rem 0;
+}
+
+.reel-machine {
+  display: grid;
+  place-items: center;
+  width: min(100%, 46rem);
+  min-height: 28rem;
+  user-select: none;
+}
+
+.reel-slot {
+  grid-template-columns: minmax(0, 28rem) 4.8rem;
+  gap: 0.8rem;
+}
+
+.reel-surface {
+  position: relative;
+  overflow: hidden;
+  border: 0.65rem solid #3d3028;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.18), transparent 18% 82%, rgba(0,0,0,0.12)),
+    #dfc59d;
+  box-shadow:
+    inset 0 0 2.5rem rgba(33, 27, 22, 0.3),
+    0 1rem 2rem rgba(53, 34, 22, 0.16);
+  touch-action: none;
+}
+
+.reel-surface-slot {
+  width: min(100%, 26rem);
+  height: 26rem;
+  border-radius: 1.4rem;
+}
+
+.reel-surface-strip {
+  width: min(100%, 44rem);
+  height: 12rem;
+  border-radius: 999px;
+  cursor: grab;
+}
+
+.reel-surface-strip:active {
+  cursor: grabbing;
+}
+
+.reel-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.reel-cell {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(33, 27, 22, 0.22);
+  border-radius: 0.7rem;
+  color: var(--ink);
+  background: rgba(255, 250, 240, 0.92);
+  font-weight: 780;
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.reel-surface-slot .reel-cell {
+  top: 50%;
+  right: 0.8rem;
+  left: 0.8rem;
+  height: 4rem;
+  margin-top: -2rem;
+  padding: 0.5rem 0.8rem;
+}
+
+.reel-surface-strip .reel-cell {
+  top: 50%;
+  left: 50%;
+  width: 9rem;
+  height: 7.5rem;
+  margin-top: -3.75rem;
+  margin-left: -4.5rem;
+  padding: 0.6rem;
+  white-space: normal;
+}
+
+.reel-sight {
+  position: absolute;
+  z-index: 2;
+  border: 3px solid var(--accent);
+  border-radius: 0.8rem;
+  background: rgba(207, 86, 53, 0.08);
+  box-shadow: inset 0 0 0 2px rgba(255, 250, 240, 0.62);
+  pointer-events: none;
+}
+
+.reel-surface-slot .reel-sight {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 4rem;
+  transform: translateY(-50%);
+}
+
+.reel-surface-strip .reel-sight {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 9rem;
+  transform: translateX(-50%);
+}
+
+.slot-lever-track {
+  position: relative;
+  width: 3.5rem;
+  height: 19rem;
+  border: 0.5rem solid #3d3028;
+  border-radius: 999px;
+  background: #bca17c;
+  box-shadow: inset 0 0 1rem rgba(33, 27, 22, 0.3);
+}
+
+.slot-lever {
+  --lever-progress: 0;
+  position: absolute;
+  top: -0.8rem;
+  left: 50%;
+  width: 3.8rem;
+  height: 3.8rem;
+  padding: 0;
+  border: 0.35rem solid #7d261d;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0.45rem 0.8rem rgba(53, 34, 22, 0.28);
+  transform: translate(-50%, calc(var(--lever-progress) * 13.6rem));
+  touch-action: none;
+  cursor: grab;
+}
+
+.slot-lever:active {
+  cursor: grabbing;
+}
+
+.slot-lever::after {
+  position: absolute;
+  top: 2.9rem;
+  left: 50%;
+  width: 0.55rem;
+  height: 3.6rem;
+  border-radius: 999px;
+  background: #3d3028;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.slot-lever-returning {
+  transition: transform 200ms cubic-bezier(.2,.9,.25,1.15);
+}
+
+.weak-gesture .reel-surface {
+  animation: reel-reject 300ms ease-out;
 }
 
 .wheel-wrap {
@@ -691,6 +859,11 @@ h1 {
   65% { transform: translateX(-50%) rotate(-6deg); }
 }
 
+@keyframes reel-reject {
+  30% { transform: translateX(0.4rem); }
+  65% { transform: translateX(-0.25rem); }
+}
+
 @media (min-width: 44rem) {
   .app-header {
     display: flex;
@@ -732,7 +905,7 @@ h1 {
     overflow: auto;
   }
 
-  .wheel-host {
+  .table-host {
     min-height: 31rem;
   }
 }

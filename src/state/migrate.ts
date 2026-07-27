@@ -12,7 +12,7 @@ import {
 } from './types'
 
 const languages = new Set<Language>(['uk', 'en'])
-const tables = new Set(['wheel', 'reel', 'cards'])
+const tables = new Set(['wheel', 'slot', 'strip', 'cards'])
 
 export const cleanStored = (lang: Language = 'en'): Stored => ({
   version: 2,
@@ -114,7 +114,7 @@ const parseStateBase = (value: unknown): Omit<PresetState, 'elimination'> | null
   const layouts = parseLayouts(value.tables)
   if (
     typeof value.lastTable !== 'string' ||
-    !tables.has(value.lastTable) ||
+    (!tables.has(value.lastTable) && value.lastTable !== 'reel') ||
     !isStringArray(value.drawn) ||
     !layouts ||
     typeof value.updatedAt !== 'number'
@@ -122,7 +122,7 @@ const parseStateBase = (value: unknown): Omit<PresetState, 'elimination'> | null
     return null
   }
   return {
-    lastTable: value.lastTable as PresetState['lastTable'],
+    lastTable: (value.lastTable === 'reel' ? 'slot' : value.lastTable) as PresetState['lastTable'],
     drawn: value.drawn,
     tables: layouts,
     updatedAt: value.updatedAt

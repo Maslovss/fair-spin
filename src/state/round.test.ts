@@ -5,6 +5,7 @@ import {
   applyResult,
   canResetRound,
   ensureCardsLayout,
+  ensureLayout,
   ensureReelLayout,
   ensureWheelLayout,
   getLiveOrder,
@@ -44,6 +45,24 @@ describe('round transitions', () => {
     expect(cards.state.tables.wheel?.order).toEqual(wheel.layout.order)
     expect(cards.state.tables.reel).toBeDefined()
     expect(cards.state.tables.cards).toBeDefined()
+  })
+
+  it('shares one reel record between slot and strip', () => {
+    const initial = createPresetState(1)
+    const slot = ensureLayout('slot', preset, initial, source())
+    const withPosition = {
+      ...slot,
+      tables: {
+        ...slot.tables,
+        reel: { ...slot.tables.reel!, offset: 12.5 }
+      }
+    }
+    const reel = withPosition.tables.reel
+    expect(reel).toBeDefined()
+    const strip = ensureLayout('strip', preset, withPosition, source())
+    expect(strip.tables.reel?.order).toEqual(reel?.order)
+    expect(strip.tables.reel?.offset).toBe(12.5)
+    expect(Object.keys(strip.tables)).toEqual(['reel'])
   })
 
   it('eliminates one occurrence and leaves non-elimination rounds untouched', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AngleHistory } from './gesture'
+import { AngleHistory, AxisHistory } from './gesture'
 
 describe('gesture history', () => {
   it('estimates velocity from roughly the last 100 ms, not only the final event', () => {
@@ -24,5 +24,16 @@ describe('gesture history', () => {
     history.push(1, 20)
     history.push(1, 200)
     expect(history.velocity(200)).toBe(0)
+  })
+})
+
+describe('linear gesture history', () => {
+  it('uses the same trailing 100 ms window on a linear axis', () => {
+    const history = new AxisHistory()
+    history.reset(0, 0)
+    history.push(40, 50)
+    history.push(72, 90)
+    history.push(72, 120)
+    expect(history.velocity(120)).toBeCloseTo(32 / 0.07)
   })
 })

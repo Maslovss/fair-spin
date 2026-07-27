@@ -54,6 +54,7 @@ export class WheelTable implements Table {
 
   mount(el: HTMLElement, context: TableContext): void {
     this.unmount()
+    if (!('angle' in context.layout)) throw new TypeError('WheelTable requires a wheel layout')
     this.container = el
     this.context = context
     this.currentAngle = context.layout.angle
@@ -260,7 +261,9 @@ export class WheelTable implements Table {
     this.currentAngle = angle
     this.rotor?.setAttribute('transform', `rotate(${(normalizeAngle(angle) * 180) / Math.PI} 160 160)`)
     if (persist && this.context) {
-      this.context.onLayout({ ...this.context.layout, angle })
+      const layout = this.context.layout
+      if (!('angle' in layout)) return
+      this.context.onLayout({ ...layout, angle })
     }
   }
 
