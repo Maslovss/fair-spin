@@ -52,12 +52,6 @@ export const renderPresetList = (
     cardTitle.textContent = preset.name
     const meta = document.createElement('p')
     meta.textContent = t('presets.count', { count: preset.items.length })
-    if (preset.elimination) {
-      const badge = document.createElement('span')
-      badge.className = 'badge'
-      badge.textContent = t('presets.elimination')
-      meta.append(' · ', badge)
-    }
     const preview = document.createElement('p')
     preview.className = 'preset-preview'
     preview.textContent = preset.items.slice(0, 4).join(' · ')

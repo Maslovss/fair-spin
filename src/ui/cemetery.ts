@@ -3,7 +3,8 @@ import type { Translate } from '../io/i18n'
 export const renderCemetery = (
   items: readonly string[],
   t: Translate,
-  onCopy: () => void
+  onCopy: () => void,
+  onReset: () => void
 ): HTMLElement => {
   const section = document.createElement('aside')
   section.className = 'cemetery'
@@ -17,7 +18,18 @@ export const renderCemetery = (
   copy.textContent = t('round.copy')
   copy.disabled = items.length === 0
   copy.addEventListener('click', onCopy)
-  header.append(title, copy)
+  const actions = document.createElement('div')
+  actions.className = 'cemetery-actions'
+  if (items.length > 0) {
+    const reset = document.createElement('button')
+    reset.type = 'button'
+    reset.className = 'text-button danger'
+    reset.textContent = t('round.reset')
+    reset.addEventListener('click', onReset)
+    actions.append(reset)
+  }
+  actions.append(copy)
+  header.append(title, actions)
   section.append(header)
   if (items.length === 0) {
     const empty = document.createElement('p')

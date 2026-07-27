@@ -2,10 +2,12 @@ import './styles.css'
 import { detectLanguage, relativeTime, translator, type Translate } from './io/i18n'
 import {
   applyResult,
+  canResetRound,
   ensureWheelLayout,
   getLiveOrder,
   getRemainingItems,
   performFinalAct,
+  setEliminationMode,
   startNewRound,
   syncEditedPreset
 } from './state/round'
@@ -18,6 +20,7 @@ import {
 } from './state/types'
 import {
   duplicatePreset,
+  createPresetStateForPreset,
   removePreset,
   seedStarterPresets
 } from './state/presets'
@@ -56,11 +59,10 @@ const updatePresetInStore = (next: Preset, previous?: Preset): void => {
     if (!previous) {
       return {
         ...stored,
-        presets: [...stored.presets, next],
-        states: { ...stored.states, [next.id]: createPresetState() }
+        presets: [...stored.presets, next]
       }
     }
-    const oldState = stored.states[previous.id] ?? createPresetState()
+    const oldState = stored.states[previous.id] ?? createPresetStateForPreset(previous)
     return {
       ...stored,
       presets: stored.presets.map((preset) => preset.id === previous.id ? next : preset),
@@ -97,8 +99,7 @@ const renderList = (stored: Stored, t: Translate): void => {
       const duplicate = duplicatePreset(preset, t('presets.copyName', { name: preset.name }))
       store.update((value) => ({
         ...value,
-        presets: [...value.presets, duplicate],
-        states: { ...value.states, [duplicate.id]: createPresetState() }
+        presets: [...value.presets, duplicate]
       }))
     },
     delete: (preset) => {
@@ -126,8 +127,14 @@ const persistPresetState = (
 }
 
 const resetRound = (preset: Preset, t: Translate): void => {
-  const state = store.get().states[preset.id] ?? createPresetState()
-  if (state.drawn.length > 0 && !window.confirm(t('round.confirmReset'))) return
+  const state = store.get().states[preset.id] ?? createPresetStateForPreset(preset)
+  if (
+    canResetRound(state) &&
+    !window.confirm(t('round.confirmReset', {
+      drawn: state.drawn.length,
+      total: preset.items.length
+    }))
+  ) return
   dismissedResume.add(preset.id)
   lastResults.delete(preset.id)
   persistPresetState(preset.id, (current) => startNewRound(preset, crypto, current))
@@ -167,18 +174,47 @@ const createResumeBanner = (
   return banner
 }
 
+const createModeSwitch = (
+  preset: Preset,
+  state: PresetState,
+  t: Translate
+): HTMLElement => {
+  const group = document.createElement('div')
+  group.className = 'mode-switch'
+  group.setAttribute('role', 'group')
+  group.setAttribute('aria-label', t('game.mode'))
+  const label = document.createElement('span')
+  label.className = 'mode-switch-label'
+  label.textContent = t('game.mode')
+  const options = document.createElement('div')
+  options.className = 'mode-switch-options'
+  const option = (elimination: boolean, text: string): HTMLButtonElement => {
+    const button = actionButton(text, 'mode-choice', () => {
+      persistPresetState(preset.id, (current) => setEliminationMode(current, elimination))
+    })
+    button.setAttribute('aria-pressed', String(state.elimination === elimination))
+    return button
+  }
+  options.append(
+    option(false, t('game.modeStays')),
+    option(true, t('game.modeEliminates'))
+  )
+  group.append(label, options)
+  return group
+}
+
 const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   const settings = stored.settings
-  let state = stored.states[preset.id] ?? createPresetState()
+  let state = stored.states[preset.id] ?? createPresetStateForPreset(preset)
   const ensured = ensureWheelLayout(preset, state, crypto)
   state = ensured.state
   if (stored.states[preset.id] !== state) {
     persistPresetState(preset.id, () => state, false)
   }
   const remaining = getRemainingItems(preset, state)
-  const liveOrder = getLiveOrder(ensured.layout.order, preset.elimination ? state.drawn : [])
-  const completed = preset.elimination && remaining.length === 0
-  const finalAct = preset.elimination && remaining.length === 1
+  const liveOrder = getLiveOrder(ensured.layout.order, state.elimination ? state.drawn : [])
+  const completed = state.elimination && remaining.length === 0
+  const finalAct = state.elimination && remaining.length === 1
   const wheelAvailable = isTableAvailable('wheel', liveOrder.length)
 
   const page = document.createElement('main')
@@ -200,7 +236,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   page.append(header)
 
   if (
-    preset.elimination &&
+    state.elimination &&
     state.drawn.length > 0 &&
     !completed &&
     !dismissedResume.has(preset.id)
@@ -214,11 +250,14 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   tableArea.className = 'table-area'
   const switcher = document.createElement('div')
   switcher.className = 'table-switcher'
+  const tableChoiceGroup = document.createElement('div')
+  tableChoiceGroup.className = 'table-choice-group'
   const switcherLabel = document.createElement('span')
   switcherLabel.textContent = t('game.table')
   const wheelChoice = actionButton(t('game.wheel'), 'table-choice active', () => undefined)
   wheelChoice.setAttribute('aria-pressed', 'true')
-  switcher.append(switcherLabel, wheelChoice)
+  tableChoiceGroup.append(switcherLabel, wheelChoice)
+  switcher.append(tableChoiceGroup, createModeSwitch(preset, state, t))
   tableArea.append(switcher)
 
   const status = document.createElement('p')
@@ -262,8 +301,13 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
   controls.append(status)
   tableArea.append(controls)
   layout.append(tableArea)
-  if (preset.elimination) {
-    layout.append(renderCemetery(state.drawn, t, () => void copyOrder(state.drawn, status, t)))
+  if (state.elimination) {
+    layout.append(renderCemetery(
+      state.drawn,
+      t,
+      () => void copyOrder(state.drawn, status, t),
+      () => resetRound(preset, t)
+    ))
   }
   page.append(layout)
   root.append(page)
@@ -290,7 +334,7 @@ const renderGame = (preset: Preset, stored: Stored, t: Translate): void => {
         if (selected === undefined) return
         lastResults.set(preset.id, selected)
         const current = store.get().states[preset.id] ?? state
-        if (preset.elimination) {
+        if (state.elimination) {
           dismissedResume.add(preset.id)
           persistPresetState(preset.id, () => applyResult(preset, current, liveOrder, index))
         } else {

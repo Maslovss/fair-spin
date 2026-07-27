@@ -41,13 +41,6 @@ export const openPresetEditor = (
   help.textContent = t('editor.itemsHelp')
   itemsLabel.append(items, help)
 
-  const eliminationLabel = document.createElement('label')
-  eliminationLabel.className = 'toggle-row'
-  const elimination = document.createElement('input')
-  elimination.type = 'checkbox'
-  elimination.checked = preset?.elimination ?? false
-  eliminationLabel.append(elimination, document.createTextNode(t('editor.elimination')))
-
   const error = document.createElement('p')
   error.className = 'form-error'
   error.setAttribute('role', 'alert')
@@ -69,8 +62,7 @@ export const openPresetEditor = (
     try {
       const input = {
         name: name.value,
-        items: parseBulkItems(items.value),
-        elimination: elimination.checked
+        items: parseBulkItems(items.value)
       }
       const next = preset ? updatePreset(preset, input) : createPreset(input)
       save(next, preset)
@@ -84,7 +76,7 @@ export const openPresetEditor = (
     }
   })
   dialog.addEventListener('close', () => dialog.remove())
-  form.append(title, nameLabel, itemsLabel, eliminationLabel, error, actions)
+  form.append(title, nameLabel, itemsLabel, error, actions)
   dialog.append(form)
   host.append(dialog)
   dialog.showModal()

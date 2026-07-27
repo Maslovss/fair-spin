@@ -30,7 +30,6 @@ const makeId = (): PresetId =>
 export interface PresetInput {
   name: string
   items: string[]
-  elimination: boolean
 }
 
 export const createPreset = (input: PresetInput, now = Date.now(), id = makeId()): Preset => {
@@ -39,7 +38,6 @@ export const createPreset = (input: PresetInput, now = Date.now(), id = makeId()
     id,
     name: valid.name,
     items: valid.items,
-    elimination: input.elimination,
     createdAt: now,
     updatedAt: now
   }
@@ -50,7 +48,6 @@ export const updatePreset = (preset: Preset, input: PresetInput, now = Date.now(
   return {
     ...preset,
     ...valid,
-    elimination: input.elimination,
     updatedAt: now
   }
 }
@@ -84,15 +81,23 @@ export const setLastTable = (stored: Stored, presetId: PresetId, table: TableId,
   }
 })
 
+interface StarterPresetData {
+  preset: Preset
+  elimination: boolean
+}
+
 const starter = (
   id: string,
   name: string,
   items: string[],
   elimination: boolean,
   now: number
-): Preset => createPreset({ name, items, elimination }, now, id)
+): StarterPresetData => ({
+  preset: createPreset({ name, items }, now, id),
+  elimination
+})
 
-export const createStarterPresets = (now = Date.now()): Preset[] => [
+const createStarterData = (now = Date.now()): StarterPresetData[] => [
   starter('starter-yes-no', 'Так / Ні', ['✅ Так', '❌ Ні'], false, now),
   starter('starter-die', 'Кубик', ['⚀ 1', '⚁ 2', '⚂ 3', '⚃ 4', '⚄ 5', '⚅ 6'], false, now),
   starter('starter-first', 'Хто перший', ['Гравець 1', 'Гравець 2', 'Гравець 3', 'Гравець 4'], true, now),
@@ -126,13 +131,22 @@ export const createStarterPresets = (now = Date.now()): Preset[] => [
   )
 ]
 
+export const createStarterPresets = (now = Date.now()): Preset[] =>
+  createStarterData(now).map(({ preset }) => preset)
+
+export const createPresetStateForPreset = (preset: Preset, now = Date.now()) =>
+  createPresetState(
+    now,
+    createStarterData(now).find(({ preset: candidate }) => candidate.id === preset.id)?.elimination ?? false
+  )
+
 export const seedStarterPresets = (stored: Stored, now = Date.now()): Stored => {
   if (stored.presets.length > 0) return stored
   const presets = createStarterPresets(now)
   return {
     ...stored,
     presets,
-    states: Object.fromEntries(presets.map((preset) => [preset.id, createPresetState(now)]))
+    states: {}
   }
 }
 

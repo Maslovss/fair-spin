@@ -6,7 +6,6 @@ export interface Preset {
   id: PresetId
   name: string
   items: string[]
-  elimination: boolean
   createdAt: number
   updatedAt: number
 }
@@ -34,6 +33,7 @@ export interface TableLayouts {
 }
 
 export interface PresetState {
+  elimination: boolean
   lastTable: TableId
   drawn: string[]
   tables: TableLayouts
@@ -47,13 +47,14 @@ export interface Settings {
 }
 
 export interface Stored {
-  version: 1
+  version: 2
   presets: Preset[]
   states: Record<PresetId, PresetState>
   settings: Settings
 }
 
-export const createPresetState = (now = Date.now()): PresetState => ({
+export const createPresetState = (now = Date.now(), elimination = false): PresetState => ({
+  elimination,
   lastTable: 'wheel',
   drawn: [],
   tables: {},

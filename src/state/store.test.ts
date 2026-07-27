@@ -22,6 +22,71 @@ describe('storage migration', () => {
     const stored = cleanStored('uk')
     expect(migrate(JSON.stringify(stored))).toEqual(stored)
   })
+
+  it('moves elimination from v1 presets into existing round state without data loss', () => {
+    const legacy = {
+      version: 1,
+      presets: [{
+        id: 'players',
+        name: 'Players',
+        items: ['A', 'B', 'C'],
+        elimination: true,
+        createdAt: 1,
+        updatedAt: 2
+      }],
+      states: {
+        players: {
+          lastTable: 'wheel',
+          drawn: ['B'],
+          tables: { wheel: { order: ['A', 'B', 'C'], angle: 1.75 } },
+          updatedAt: 3
+        }
+      },
+      settings: { sound: true, haptics: false, lang: 'uk' }
+    }
+    const migrated = migrate(legacy)
+    expect(migrated.version).toBe(2)
+    expect(migrated.presets[0]).not.toHaveProperty('elimination')
+    expect(migrated.states.players).toMatchObject({
+      elimination: true,
+      drawn: ['B'],
+      tables: { wheel: { order: ['A', 'B', 'C'], angle: 1.75 } }
+    })
+  })
+
+  it('creates v2 state for a legacy preset that had no state yet', () => {
+    const migrated = migrate({
+      version: 1,
+      presets: [{
+        id: 'fresh',
+        name: 'Fresh',
+        items: ['A', 'B'],
+        elimination: false,
+        createdAt: 1,
+        updatedAt: 4
+      }],
+      states: {},
+      settings: { sound: true, haptics: true, lang: 'en' }
+    })
+    expect(migrated.states.fresh).toMatchObject({ elimination: false, drawn: [], updatedAt: 4 })
+  })
+
+  it('does not migrate version 2 a second time', () => {
+    const current = {
+      ...cleanStored('uk'),
+      presets: [{ id: 'p', name: 'P', items: ['A', 'B'], createdAt: 1, updatedAt: 2 }],
+      states: {
+        p: {
+          elimination: true,
+          lastTable: 'wheel' as const,
+          drawn: ['A'],
+          tables: {},
+          updatedAt: 3
+        }
+      }
+    }
+    expect(migrate(current)).toEqual(current)
+  })
 })
 
 describe('PersistedStore', () => {

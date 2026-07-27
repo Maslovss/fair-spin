@@ -20,7 +20,7 @@ const removeOccurrences = (items: readonly string[], removed: readonly string[])
 }
 
 export const getRemainingItems = (preset: Preset, state: PresetState): string[] =>
-  preset.elimination ? removeOccurrences(preset.items, state.drawn) : [...preset.items]
+  state.elimination ? removeOccurrences(preset.items, state.drawn) : [...preset.items]
 
 export const getLiveOrder = (order: readonly string[], drawn: readonly string[]): string[] =>
   removeOccurrences(order, drawn)
@@ -97,7 +97,7 @@ export const ensureLayout = (
 }
 
 export const applyResult = (
-  preset: Preset,
+  _preset: Preset,
   state: PresetState,
   liveOrder: readonly string[],
   index: number,
@@ -106,7 +106,7 @@ export const applyResult = (
   if (!Number.isInteger(index) || index < 0 || index >= liveOrder.length) {
     throw new RangeError('Result index is outside the current table')
   }
-  if (!preset.elimination) return state
+  if (!state.elimination) return state
   return {
     ...state,
     drawn: [...state.drawn, liveOrder[index] as string],
@@ -116,7 +116,7 @@ export const applyResult = (
 
 export const performFinalAct = (preset: Preset, state: PresetState, now = Date.now()): PresetState => {
   const remaining = getRemainingItems(preset, state)
-  if (!preset.elimination || remaining.length !== 1) {
+  if (!state.elimination || remaining.length !== 1) {
     throw new Error('Final act requires exactly one remaining elimination item')
   }
   return { ...state, drawn: [...state.drawn, remaining[0] as string], updatedAt: now }
@@ -134,7 +134,7 @@ export const syncEditedPreset = (
     const index = allowed.indexOf(item)
     if (index < 0) return false
     allowed.splice(index, 1)
-    return next.elimination
+    return true
   })
   const wheel = state.tables.wheel
     ? { ...state.tables.wheel, order: reconcileOrder(state.tables.wheel.order, next.items, source) }
@@ -179,3 +179,14 @@ export const startNewRound = (
   },
   updatedAt: now
 })
+
+export const setEliminationMode = (
+  state: PresetState,
+  elimination: boolean,
+  now = Date.now()
+): PresetState =>
+  state.elimination === elimination
+    ? state
+    : { ...state, elimination, updatedAt: now }
+
+export const canResetRound = (state: PresetState): boolean => state.drawn.length > 0

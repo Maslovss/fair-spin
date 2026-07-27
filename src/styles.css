@@ -401,11 +401,24 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.7rem;
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.table-choice-group,
+.mode-switch,
+.mode-switch-options {
+  display: flex;
+  align-items: center;
+}
+
+.table-choice-group {
+  gap: 0.65rem;
 }
 
 .table-choice {
@@ -415,6 +428,41 @@ h1 {
   background: var(--ink);
   letter-spacing: 0;
   text-transform: none;
+}
+
+.mode-switch {
+  gap: 0.45rem;
+  text-transform: none;
+}
+
+.mode-switch-label {
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+.mode-switch-options {
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(230, 216, 193, 0.42);
+}
+
+.mode-choice {
+  min-height: 2.2rem;
+  padding: 0.42rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.mode-choice[aria-pressed="true"] {
+  color: #fffaf0;
+  background: var(--accent-dark);
+  box-shadow: 0 4px 10px rgba(158, 61, 39, 0.18);
 }
 
 .wheel-host {
@@ -587,6 +635,12 @@ h1 {
 .cemetery h2 {
   margin: 0;
   font-size: 1.55rem;
+}
+
+.cemetery-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
 }
 
 .cemetery ol {

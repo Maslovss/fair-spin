@@ -3,12 +3,14 @@ import type { CryptoSource } from '../core/random'
 import { createPreset } from './presets'
 import {
   applyResult,
+  canResetRound,
   ensureCardsLayout,
   ensureReelLayout,
   ensureWheelLayout,
   getLiveOrder,
   getRemainingItems,
   performFinalAct,
+  setEliminationMode,
   startNewRound,
   syncEditedPreset
 } from './round'
@@ -25,7 +27,7 @@ class IncrementingCrypto implements CryptoSource {
 
 const source = () => new IncrementingCrypto()
 const preset = createPreset(
-  { name: 'Players', items: ['A', 'B', 'C', 'D'], elimination: true },
+  { name: 'Players', items: ['A', 'B', 'C', 'D'] },
   1,
   'players'
 )
@@ -46,17 +48,17 @@ describe('round transitions', () => {
 
   it('eliminates one occurrence and leaves non-elimination rounds untouched', () => {
     const layout = ['A', 'B', 'C', 'D']
-    const state = applyResult(preset, createPresetState(), layout, 1, 20)
+    const state = applyResult(preset, createPresetState(1, true), layout, 1, 20)
     expect(state.drawn).toEqual(['B'])
     expect(getRemainingItems(preset, state)).toEqual(['A', 'C', 'D'])
     expect(getLiveOrder(layout, state.drawn)).toEqual(['A', 'C', 'D'])
 
-    const repeatPreset = { ...preset, elimination: false }
-    expect(applyResult(repeatPreset, state, layout, 0)).toBe(state)
+    const repeatState = setEliminationMode(state, false, 21)
+    expect(applyResult(preset, repeatState, layout, 0)).toBe(repeatState)
   })
 
   it('requires a player tap for the final item', () => {
-    const state = { ...createPresetState(), drawn: ['A', 'B', 'C'] }
+    const state = { ...createPresetState(1, true), drawn: ['A', 'B', 'C'] }
     const final = performFinalAct(preset, state, 30)
     expect(final.drawn).toEqual(['A', 'B', 'C', 'D'])
     expect(() => performFinalAct(preset, final)).toThrow()
@@ -64,7 +66,7 @@ describe('round transitions', () => {
 
   it('silently reconciles additions and removals during a round', () => {
     const existing = {
-      ...createPresetState(),
+      ...createPresetState(1, true),
       drawn: ['B'],
       tables: { wheel: { order: ['A', 'B', 'C', 'D'], angle: 1.25 } }
     }
@@ -77,7 +79,7 @@ describe('round transitions', () => {
 
   it('reshuffles layouts for a new round while preserving wheel angle', () => {
     const state = {
-      ...createPresetState(),
+      ...createPresetState(1, true),
       drawn: ['A'],
       tables: {
         wheel: { order: ['A', 'B', 'C', 'D'], angle: 2.75 },
@@ -85,8 +87,27 @@ describe('round transitions', () => {
       }
     }
     const reset = startNewRound(preset, source(), state, 50)
+    expect(canResetRound(state)).toBe(true)
+    expect(canResetRound(reset)).toBe(false)
     expect(reset.drawn).toEqual([])
     expect(reset.tables.wheel?.angle).toBe(2.75)
     expect(reset.tables.cards).toMatchObject({ dealt: false, cut: false })
+  })
+
+  it('switches game mode without losing the cemetery or its order', () => {
+    const eliminating = {
+      ...createPresetState(1, true),
+      drawn: ['B', 'A'],
+      tables: { wheel: { order: ['A', 'B', 'C', 'D'], angle: 0.75 } }
+    }
+    const repeating = setEliminationMode(eliminating, false, 2)
+    expect(repeating.drawn).toEqual(['B', 'A'])
+    expect(getRemainingItems(preset, repeating)).toEqual(['A', 'B', 'C', 'D'])
+    expect(repeating.tables).toEqual(eliminating.tables)
+
+    const restored = setEliminationMode(repeating, true, 3)
+    expect(restored.drawn).toEqual(['B', 'A'])
+    expect(getRemainingItems(preset, restored)).toEqual(['C', 'D'])
+    expect(restored.tables.wheel?.order).toEqual(['A', 'B', 'C', 'D'])
   })
 })
